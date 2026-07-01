@@ -5,7 +5,7 @@
 ## 1. Canonical Schema Location
 
 ```text
-../schemas/coasonix-v1.schema.json
+../../../schemas/coasonix-v1.schema.json
 ```
 
 该文件是 v1 schema registry 的机器可执行锚点。
@@ -15,6 +15,7 @@
 ```text
 task_state_v1
 context_projection_v1
+review_diff_input_v1
 review_result_v1
 security_audit_v1
 debug_hypothesis_v1
@@ -31,7 +32,9 @@ audit_event_v1
 human_approval_request_v1
 transition_request_v1
 transition_result_v1
+schema_validation_request_v1
 schema_validation_result_v1
+policy_evaluation_request_v1
 policy_evaluation_result_v1
 runtime_operation_request_v1
 runtime_decision_v1

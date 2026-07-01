@@ -18,7 +18,7 @@ This repository is currently a documentation-first specification for Coasonix, a
 There is no application build system yet. Use lightweight checks:
 
 - `git status --short` checks pending edits before and after changes.
-- `python -m json.tool docs/coasonix/schemas/coasonix-v1.schema.json > $null` verifies the schema file is valid JSON.
+- `python -m json.tool schemas/coasonix-v1.schema.json > $null` verifies the schema file is valid JSON.
 - `git diff -- docs/coasonix` reviews documentation-only changes before commit.
 
 When runtime code is added, document its build and test commands here before relying on them in PRs.

@@ -2,7 +2,7 @@
 
 ## 17. 落地路线
 
-### 17.1 Phase 1：MCP STDIO Wrapper
+### 17.1 v1：MCP STDIO Adapter + Rust Runtime Worker
 
 目标：最小可行。
 
@@ -10,24 +10,41 @@ MVP 工程默认：
 
 ```text
 1. local single-machine STDIO transport.
-2. Runtime Kernel embedded inside `reasonix-expert` Wrapper.
+2. TypeScript `reasonix-expert` MCP Adapter manages one Rust Runtime Worker.
 3. one Coasonix task should use one isolated git worktree by default.
 4. same worktree write operations are serialized.
 5. Reasonix session lanes are task-scoped: session_key includes task_id.
 6. Reasonix project memory may generate hypotheses, not verification evidence.
-7. `reasonix.propose_patch` returns patch_proposal_v1 only and never writes the Codex worktree.
+7. v1 exposes `reasonix.review_diff` only; patch proposal is disabled until
+   patch safety gates and conformance tests exist.
 8. remote Reasonix worker / shared Gateway is deferred to a later deployment profile.
 ```
 
 实现：
 
 ```text
-tools/reasonix-mcp-server/
+packages/reasonix-expert-mcp/
   package.json
   src/
     index.ts
+    mcp/
+    worker/
+    reasonix/
+    errors/
+
+crates/
+  coasonix-runtime-core/
+  coasonix-runtime-worker/
+
+schemas/
+  coasonix-v1.schema.json
+```
+
+Post-v1 tools remain documented contracts until their gates are implemented:
+
+```text
+packages/reasonix-expert-mcp/src/
     tools/
-      review_diff.ts
       security_audit.ts
       debug_hypothesis.ts
       architecture_options.ts
@@ -47,7 +64,7 @@ tools/reasonix-mcp-server/
 文档侧 canonical schema registry：
 
 ```text
-../schemas/coasonix-v1.schema.json
+../../../schemas/coasonix-v1.schema.json
 ```
 
 实现时可以选择拆分为多个 schema 文件，但必须保持与 canonical registry 等价，并通过 Draft 2020-12 校验。
@@ -56,8 +73,8 @@ Codex 配置：
 
 ```toml
 [mcp_servers.reasonix_expert]
-command = "node"
-args = ["./tools/reasonix-mcp-server/dist/index.js"]
+command = "bun"
+args = ["run", "packages/reasonix-expert-mcp/src/index.ts"]
 cwd = "."
 startup_timeout_sec = 10
 tool_timeout_sec = 300
@@ -66,27 +83,29 @@ default_tools_approval_mode = "prompt"
 
 ---
 
-### 17.2 Phase 2：权限与审计
+### 17.2 v1 Runtime Gate：权限、审计与持久化
 
 新增：
 
 ```text
-.agent/policy.yaml
-.agent/audit/*.jsonl
+.agent/coasonix.sqlite
 schema validation
 path allowlist / denylist
-Reasonix Project Controller
-Reasonix Session Pool
-Reasonix session lane router
+shell argv policy matcher
+task state machine runner
+runtime_decision_v1
+SQLite append-only audit
+SQLite locks
+SQLite cache metadata
 patch safety checker
 timeout manager
 ```
 
 ---
 
-### 17.3 Phase 3：Streamable HTTP
+### 17.3 非 v1 部署选项：Streamable HTTP
 
-适用：
+仅当部署模型变成共享服务时适用：
 
 ```text
 团队共享
@@ -94,6 +113,12 @@ CI 调用
 远程 Reasonix worker
 多仓库统一服务
 ```
+
+v1 不实现本地 daemon、不实现远程 Runtime Service、不暴露 HTTP listener。
+Codex 启动时启动配置的 TypeScript MCP Adapter，并通过 initialize 建立
+MCP protocol session。`tools/call` 只分配或路由 Coasonix 逻辑会话，不启动
+新进程。每个 adapter server instance 绑定一个 repo-local Rust Runtime
+Worker 和 `.agent/coasonix.sqlite` 恢复边界。
 
 新增：
 

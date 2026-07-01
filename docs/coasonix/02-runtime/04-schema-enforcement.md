@@ -3,7 +3,7 @@
 Schema Enforcement Layer validates all structured inputs and outputs against the canonical registry:
 
 ```text
-../schemas/coasonix-v1.schema.json
+../../../schemas/coasonix-v1.schema.json
 ```
 
 This document owns runtime schema enforcement behavior. Version evolution rules live in `../05-versioning/01-schema-contract-and-versioning.md`.
@@ -89,8 +89,22 @@ performance_review without benchmark_plan
 invalid error_result_v1
 ```
 
-## 6. Known Coverage Gap
+## 6. Coverage Status
 
-The runtime examples currently reference `schema_validation_request_v1` and `policy_evaluation_request_v1`. The canonical schema registry defines `schema_validation_result_v1` and `policy_evaluation_result_v1`, but not those request objects as standalone top-level schema variants.
+The canonical schema registry defines both request and result objects for v1
+tool input, schema evaluation, and policy evaluation:
 
-This is a documentation/schema coverage issue to resolve in a schema-focused task. It is not changed by this structural reorganization.
+```text
+review_diff_input_v1
+schema_validation_request_v1
+schema_validation_result_v1
+policy_evaluation_request_v1
+policy_evaluation_result_v1
+```
+
+Architecture impact:
+
+```text
+No architecture change. This closes a machine-contract gap so Rust can validate
+request and result envelopes through the same root registry.
+```

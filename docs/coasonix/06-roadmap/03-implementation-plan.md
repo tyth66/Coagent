@@ -251,7 +251,14 @@ Reasonix relies on hidden memory
 
 ### 6.1 Definition
 
-MCP Session and Transport defines how Codex initializes, lists, and calls `reasonix-expert` tools through STDIO or Streamable HTTP.
+MCP Session and Transport defines how Codex initializes, lists, and calls
+`reasonix-expert` tools through STDIO in v1. Streamable HTTP is a non-v1
+deployment option only if Coasonix later becomes a shared service.
+
+The process boundary starts at Codex startup: Codex starts the configured
+`reasonix-expert` MCP server process and initializes the MCP protocol session.
+`tools/call` does not start a new process; it allocates or routes the Coasonix
+logical session for a task, request, and lane inside the existing adapter.
 
 ### 6.2 Lifecycle
 
@@ -268,12 +275,19 @@ initialize
 ```text
 1. stdout contains JSON-RPC only.
 2. stderr contains logs.
-3. each JSON-RPC message is newline-delimited.
-4. no debug text on stdout.
-5. server handles no business request before initialization, except ping.
+3. Codex startup starts the configured TypeScript MCP Adapter process.
+4. MCP initialize establishes the protocol session.
+5. The adapter manages one repo-local Rust Runtime Worker for that server instance.
+6. No v1 daemon, remote Runtime Service, or HTTP listener exists.
+7. each JSON-RPC message is newline-delimited.
+8. no debug text on stdout.
+9. server handles no business request before initialization, except ping.
+10. tools/call allocates or routes Coasonix logical sessions only.
 ```
 
-### 6.4 HTTP Requirements
+### 6.4 Non-v1 HTTP Requirements
+
+HTTP applies only to a future shared-service deployment profile.
 
 ```text
 1. single /mcp endpoint
@@ -305,6 +319,11 @@ Tool and Schema Registry is the authoritative list of available Reasonix capabil
 
 ```text
 reasonix.review_diff
+```
+
+Post-v1 documented tool contracts:
+
+```text
 reasonix.security_audit
 reasonix.debug_hypothesis
 reasonix.architecture_options
@@ -316,6 +335,7 @@ reasonix.test_plan
 ### 7.3 Schema Set
 
 ```text
+review_diff_input_v1.json
 review_result_v1.json
 security_audit_v1.json
 debug_hypothesis_v1.json

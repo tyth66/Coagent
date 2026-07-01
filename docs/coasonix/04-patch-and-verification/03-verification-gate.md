@@ -57,4 +57,4 @@ Rules:
 
 ## 5. Output Contract
 
-Verification artifacts validate against `verification_result_v1` in `../schemas/coasonix-v1.schema.json`.
+Verification artifacts validate against `verification_result_v1` in `../../../schemas/coasonix-v1.schema.json`.

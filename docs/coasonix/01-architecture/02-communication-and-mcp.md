@@ -77,8 +77,7 @@ output_schema
     TASK-001/
       SNAP-001.json
 
-  audit/
-    TASK-001.events.jsonl
+  coasonix.sqlite
 ```
 
 ---
@@ -118,6 +117,17 @@ Reasonix 的输出必须通过 Wrapper 转成结构化结果。
 
 ## 6. MCP 通信规范
 
+MCP 外部协议以官方稳定 specification 为基线。实现前必须重新确认
+official MCP specification 和 TypeScript SDK 的当前稳定版本；标记为
+beta / preview 的 SDK major version 不作为 v1 生产基线。
+
+v1 只实现本地 STDIO MCP server。配置好的 `reasonix-expert` MCP server
+随 Codex 启动而启动，并在 initialize 阶段建立 MCP protocol session。
+后续 `tools/call` 只在这个已运行的 adapter 内分配或路由 Coasonix 逻辑
+会话，例如 task namespace、session lane、request_id 和 runtime gate
+context；它不启动 MCP server 进程。Streamable HTTP 只是部署模型变化时的
+后续选项，不属于 v1 roadmap。
+
 ### 6.1 MCP 角色映射
 
 | MCP 概念 | 本系统对应组件 |
@@ -143,9 +153,11 @@ Codex
   -> MCP tools/list
   -> MCP tools/call
   -> reasonix-expert MCP Server
-  -> Reasonix Wrapper
-  -> Reasonix Project / Session Lane Router
-  -> Reasonix Runtime
+  -> TypeScript reasonix-expert MCP Adapter
+  -> JSON-RPC 2.0 over stdio
+  -> Rust Runtime Worker
+  -> Rust Runtime Core
+  -> Reasonix CLI only after Rust allow
   -> JSON result
   -> MCP structuredContent
   -> Codex validation
@@ -166,10 +178,19 @@ initialize
 
 初始化阶段：
 
-1. Codex 发送 `initialize`。
-2. Wrapper 返回 protocol version、capabilities、serverInfo 和 instructions。
-3. Codex 发送 `notifications/initialized`。
-4. 正常进入 `tools/list` 和 `tools/call` 阶段。
+1. Codex 启动配置的 `reasonix-expert` MCP server 进程。
+2. Codex 发送 `initialize`。
+3. Wrapper 返回 protocol version、capabilities、serverInfo 和 instructions。
+4. Codex 发送 `notifications/initialized`。
+5. 正常进入 `tools/list` 和 `tools/call` 阶段。
+
+`tools/call` 阶段：
+
+1. 不启动 MCP server 进程。
+2. 不创建新的 MCP protocol session。
+3. 只在已运行 adapter 内分配或选择 Coasonix task namespace 和 session lane。
+4. 通过 Rust Runtime Worker 执行 schema/state/policy/audit gate。
+5. Rust allow 后才允许 adapter 调用 Reasonix。
 
 Wrapper 在初始化前不应处理除 ping 之外的业务请求。
 
@@ -244,7 +265,12 @@ Reasonix Expert is a read-first expert analysis server for Codex. It provides ar
 本地开发优先使用 STDIO。
 
 ```text
-Codex --stdio--> reasonix-expert MCP Server --subprocess--> Reasonix
+Codex startup --stdio--> reasonix-expert MCP Server
+  -> MCP initialize creates protocol session
+  -> tools/call allocates/routes Coasonix logical session
+  -> TypeScript MCP Adapter
+  -> Rust Runtime Worker
+  -> Reasonix only after Rust allow
 ```
 
 优点：
@@ -258,19 +284,25 @@ Codex --stdio--> reasonix-expert MCP Server --subprocess--> Reasonix
 
 STDIO 规则：
 
-1. Codex 启动 Wrapper 子进程。
+1. Codex 启动时启动配置的 `reasonix-expert` MCP server 子进程。
 2. Wrapper 从 stdin 读取 JSON-RPC。
 3. Wrapper 向 stdout 写 JSON-RPC。
 4. stdout 不能写非 MCP 消息。
 5. 日志必须写 stderr。
 6. 每条 JSON-RPC 消息以换行分隔。
 7. 不得在 stdout 输出调试文本。
+8. `tools/call` 只分配或路由 Coasonix 逻辑会话，不启动 MCP server 进程。
+9. 一个 MCP server 实例绑定一个 repo-local Runtime Worker；不得跨 Codex 启动的 MCP server 实例共享 worker 内存。
 
 ---
 
-#### 6.6.2 Phase 2 推荐：Streamable HTTP
+#### 6.6.2 非 v1 选项：Streamable HTTP
 
-团队共享或远程服务使用 Streamable HTTP。
+团队共享或远程服务才考虑 Streamable HTTP。
+
+Coasonix v1 不实现本地 daemon、不实现远程 Runtime Service、不暴露 HTTP
+listener。只有当部署模型从“Codex 启动本地 MCP server”变成“共享服务”时，
+才重新评估 Streamable HTTP。
 
 ```text
 Codex --HTTP POST /mcp--> reasonix-expert service
@@ -300,36 +332,24 @@ HTTP 版必须支持：
 # .codex/config.toml
 
 [mcp_servers.reasonix_expert]
-command = "node"
-args = ["./tools/reasonix-mcp-server/dist/index.js"]
+command = "bun"
+args = ["run", "packages/reasonix-expert-mcp/src/index.ts"]
 cwd = "."
 startup_timeout_sec = 10
 tool_timeout_sec = 300
 required = false
 
 enabled_tools = [
-  "reasonix.review_diff",
-  "reasonix.security_audit",
-  "reasonix.debug_hypothesis",
-  "reasonix.architecture_options",
-  "reasonix.performance_review",
-  "reasonix.propose_patch",
-  "reasonix.test_plan"
+  "reasonix.review_diff"
 ]
 
 default_tools_approval_mode = "prompt"
 
 [mcp_servers.reasonix_expert.tools."reasonix.review_diff"]
 approval_mode = "prompt"
-
-[mcp_servers.reasonix_expert.tools."reasonix.security_audit"]
-approval_mode = "prompt"
-
-[mcp_servers.reasonix_expert.tools."reasonix.propose_patch"]
-approval_mode = "prompt"
 ```
 
-#### Streamable HTTP 配置
+#### Streamable HTTP 配置（非 v1）
 
 ```toml
 # .codex/config.toml

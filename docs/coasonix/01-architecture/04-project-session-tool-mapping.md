@@ -456,9 +456,10 @@ Coasonix MVP defaults are conservative. Safety and auditability take precedence 
 3. Writes to the same worktree MUST be serialized by Runtime locks.
 4. Session lanes are task-scoped by default: session_key includes task_id.
 5. Reasonix project memory/history may inform hypotheses only; it is not verification evidence.
-6. `reasonix.propose_patch` returns patch_proposal_v1 only and never writes the Codex worktree.
-7. MVP Runtime Kernel is embedded inside `reasonix-expert` Wrapper.
-8. MVP transport is local STDIO; remote Reasonix worker / multi-project Gateway is a later deployment profile.
+6. v1 exposes `reasonix.review_diff` only; patch proposal remains disabled until
+   patch safety gates and conformance tests exist.
+7. The TypeScript MCP Adapter manages one repo-local Rust Runtime Worker.
+8. MVP transport is local STDIO; remote Reasonix worker / multi-project Gateway is a non-v1 deployment profile.
 ```
 
 ### 5.1 Worktree Default
@@ -549,17 +550,25 @@ Future `L3_ISOLATED_WORKTREE` may allow Reasonix to experiment inside an isolate
 MVP deployment:
 
 ```text
-Codex -> reasonix-expert Wrapper(Runtime Kernel + Session Router) -> local Reasonix
+Codex -> TypeScript reasonix-expert MCP Adapter -> Rust Runtime Worker -> local Reasonix
 transport: STDIO
+database: .agent/coasonix.sqlite
+process boundary: Codex startup launches one configured MCP server instance
+protocol boundary: initialize creates one MCP protocol session
+tool-call boundary: tools/call allocates/routes task namespace and session lane
+worker boundary: one repo-local Rust Runtime Worker per MCP server instance
 ```
 
-Future deployment:
+Non-v1 shared-service deployment:
 
 ```text
 Codex -> Gateway -> Runtime Service -> Reasonix Project Controller / worker pool
 transport: Streamable HTTP
 requires: auth, tenant isolation, rate limits, request queue, central audit store
 ```
+
+The shared-service deployment is not a planned v1 phase. It should be revisited
+only if Coasonix needs shared team infrastructure or remote workers.
 
 ## 6. Continuity Rules
 
@@ -762,7 +771,7 @@ cross-project result cache hit -> deny
 
 ```text
 1. Codex session calls a reasonix.* read-only tool.
-2. Wrapper creates request_id.
+2. TypeScript adapter allocates or validates request_id.
 3. Runtime Gate validates state, schema, policy, budget, and route.
 4. Context Projector writes context_projection_v1.
 5. SnapshotRegistry freezes snapshot_id and artifact hashes.

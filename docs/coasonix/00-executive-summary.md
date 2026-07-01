@@ -5,7 +5,7 @@ Coasonix is a Codex-centered expert delegation runtime for calling Reasonix as a
 ```text
 Codex = primary controller, orchestrator, executor, and final decision maker
 Reasonix = DeepSeek cache-first expert multi-agent system
-reasonix-expert Wrapper = MCP Gateway + Runtime Gate + Session Router
+reasonix-expert = TypeScript MCP Adapter + managed Rust Runtime Worker
 same project = shared Project Controller + isolated task namespaces + lane sessions
 different project = isolated Project Controller and project-scoped state/cache/policy
 ```
@@ -17,6 +17,7 @@ Deterministic Multi-Agent Runtime Spec: complete
 Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
+v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
 Safe autonomous operation: blocked until runtime engines and conformance tests are implemented
 ```
 
@@ -24,12 +25,13 @@ Safe autonomous operation: blocked until runtime engines and conformance tests a
 
 ```text
 1. Local single-machine STDIO transport.
-2. Runtime Kernel embedded inside `reasonix-expert` Wrapper.
+2. TypeScript `reasonix-expert` MCP Adapter manages one repo-local Rust Runtime Worker.
 3. One Coasonix task should use one isolated git worktree by default.
 4. Same-worktree write operations are serialized.
 5. Reasonix session lanes are task-scoped: session_key includes task_id.
 6. Reasonix project memory may generate hypotheses, not verification evidence.
-7. `reasonix.propose_patch` returns patch_proposal_v1 only and never writes the Codex worktree.
+7. v1 exposes `reasonix.review_diff` only; patch proposal remains disabled until
+   patch safety gates and conformance tests exist.
 8. Remote Reasonix worker / shared Gateway is deferred to a later deployment profile.
 ```
 

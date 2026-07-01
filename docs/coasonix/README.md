@@ -25,20 +25,24 @@ Wrapper = MCP Gateway + Runtime Gate + Session Router
 9. [02-runtime/04-schema-enforcement.md](02-runtime/04-schema-enforcement.md) - schema enforce 规则和当前 schema 覆盖缺口
 10. [02-runtime/05-observability-contract.md](02-runtime/05-observability-contract.md) - metrics、tracing、debug hooks 和 audit 可观测性
 11. [02-runtime/06-executable-runtime-details.md](02-runtime/06-executable-runtime-details.md) - canonicalization、matcher、cache、audit、verification 和 approval 的可执行 runtime 细节
-12. [03-reasonix/01-tool-contracts-and-wrapper.md](03-reasonix/01-tool-contracts-and-wrapper.md) - Reasonix capability tools、Wrapper 和 JSON-RPC 结果契约
-13. [03-reasonix/02-reasonix-concurrency-model.md](03-reasonix/02-reasonix-concurrency-model.md) - Reasonix 并发、结果合并和写入串行化边界
-14. [03-reasonix/03-cache-engineering-model.md](03-reasonix/03-cache-engineering-model.md) - cache key、失效、复用和 cache observability
-15. [03-reasonix/04-context-projection-threat-model.md](03-reasonix/04-context-projection-threat-model.md) - 上下文投影威胁模型和对抗测试
-16. [04-patch-and-verification/01-patch-transaction-model.md](04-patch-and-verification/01-patch-transaction-model.md) - patch transaction、原子性和回滚语义
-17. [04-patch-and-verification/02-patch-safety-checker.md](04-patch-and-verification/02-patch-safety-checker.md) - patch safety checker、敏感路径和安全门禁
-18. [04-patch-and-verification/03-verification-gate.md](04-patch-and-verification/03-verification-gate.md) - 验证证据、verification gap 和 completion gate
-19. [04-patch-and-verification/04-human-approval-gate.md](04-patch-and-verification/04-human-approval-gate.md) - 人工审批触发、阻塞状态和审计要求
-20. [05-versioning/01-schema-contract-and-versioning.md](05-versioning/01-schema-contract-and-versioning.md) - 机器可执行 schema contract 和 schema 演进规则
-21. [05-versioning/02-versioning-and-compatibility.md](05-versioning/02-versioning-and-compatibility.md) - Codex / Wrapper / Reasonix / Schema 兼容策略
-22. [06-roadmap/01-framework-reassessment.md](06-roadmap/01-framework-reassessment.md) - 框架成熟度复审和实现优先级
-23. [06-roadmap/02-roadmap-and-defaults.md](06-roadmap/02-roadmap-and-defaults.md) - MVP 默认配置和路线图
-24. [06-roadmap/03-implementation-plan.md](06-roadmap/03-implementation-plan.md) - 关键节点定义、工程规格和实现检查点
-25. [schemas/coasonix-v1.schema.json](schemas/coasonix-v1.schema.json) - v1 schema registry
+12. [02-runtime/07-sqlite-persistence.md](02-runtime/07-sqlite-persistence.md) - repo-local SQLite state、audit、lock 和 cache metadata 持久化契约
+13. [03-reasonix/01-tool-contracts-and-wrapper.md](03-reasonix/01-tool-contracts-and-wrapper.md) - Reasonix capability tools、Wrapper 和 JSON-RPC 结果契约
+14. [03-reasonix/02-reasonix-concurrency-model.md](03-reasonix/02-reasonix-concurrency-model.md) - Reasonix 并发、结果合并和写入串行化边界
+15. [03-reasonix/03-cache-engineering-model.md](03-reasonix/03-cache-engineering-model.md) - cache key、失效、复用和 cache observability
+16. [03-reasonix/04-context-projection-threat-model.md](03-reasonix/04-context-projection-threat-model.md) - 上下文投影威胁模型和对抗测试
+17. [04-patch-and-verification/01-patch-transaction-model.md](04-patch-and-verification/01-patch-transaction-model.md) - patch transaction、原子性和回滚语义
+18. [04-patch-and-verification/02-patch-safety-checker.md](04-patch-and-verification/02-patch-safety-checker.md) - patch safety checker、敏感路径和安全门禁
+19. [04-patch-and-verification/03-verification-gate.md](04-patch-and-verification/03-verification-gate.md) - 验证证据、verification gap 和 completion gate
+20. [04-patch-and-verification/04-human-approval-gate.md](04-patch-and-verification/04-human-approval-gate.md) - 人工审批触发、阻塞状态和审计要求
+21. [05-versioning/01-schema-contract-and-versioning.md](05-versioning/01-schema-contract-and-versioning.md) - 机器可执行 schema contract 和 schema 演进规则
+22. [05-versioning/02-versioning-and-compatibility.md](05-versioning/02-versioning-and-compatibility.md) - Codex / Wrapper / Reasonix / Schema 兼容策略
+23. [06-roadmap/01-framework-reassessment.md](06-roadmap/01-framework-reassessment.md) - 框架成熟度复审和实现优先级
+24. [06-roadmap/02-roadmap-and-defaults.md](06-roadmap/02-roadmap-and-defaults.md) - MVP 默认配置和路线图
+25. [06-roadmap/03-implementation-plan.md](06-roadmap/03-implementation-plan.md) - 关键节点定义、工程规格和实现检查点
+26. [06-roadmap/04-technology-selection.md](06-roadmap/04-technology-selection.md) - Rust Runtime Core + TypeScript MCP Adapter 技术选型
+27. [06-roadmap/05-v1-mvp-scope.md](06-roadmap/05-v1-mvp-scope.md) - v1-core / v1-adapter 第一版实现范围
+28. [06-roadmap/06-runtime-core-api.md](06-roadmap/06-runtime-core-api.md) - Rust Runtime Core API 和数据模型边界
+29. [../../schemas/coasonix-v1.schema.json](../../schemas/coasonix-v1.schema.json) - v1 schema registry
 
 ## 目录结构
 
@@ -50,12 +54,13 @@ docs/
     01-architecture/
     02-runtime/
       06-executable-runtime-details.md
+      07-sqlite-persistence.md
     03-reasonix/
     04-patch-and-verification/
     05-versioning/
     06-roadmap/
-    schemas/
-      coasonix-v1.schema.json
+schemas/
+  coasonix-v1.schema.json
 ```
 
 ## 实现前必读
@@ -69,7 +74,7 @@ Wrapper MVP:
 02-runtime/03-policy-engine.md
 02-runtime/04-schema-enforcement.md
 02-runtime/06-executable-runtime-details.md
-schemas/coasonix-v1.schema.json
+../../schemas/coasonix-v1.schema.json
 ```
 
 Runtime Kernel:
@@ -81,6 +86,7 @@ Runtime Kernel:
 02-runtime/04-schema-enforcement.md
 02-runtime/05-observability-contract.md
 02-runtime/06-executable-runtime-details.md
+02-runtime/07-sqlite-persistence.md
 ```
 
 Reasonix Project Controller / Session Router:
@@ -112,12 +118,16 @@ Patch and verification path:
 | Runtime gates | [02-runtime/02-runtime-enforcement-layer.md](02-runtime/02-runtime-enforcement-layer.md) |
 | Policy rules | [02-runtime/03-policy-engine.md](02-runtime/03-policy-engine.md) |
 | Executable runtime details | [02-runtime/06-executable-runtime-details.md](02-runtime/06-executable-runtime-details.md) |
-| Schema registry | [schemas/coasonix-v1.schema.json](schemas/coasonix-v1.schema.json) |
+| SQLite persistence | [02-runtime/07-sqlite-persistence.md](02-runtime/07-sqlite-persistence.md) |
+| Schema registry | [../../schemas/coasonix-v1.schema.json](../../schemas/coasonix-v1.schema.json) |
 | Reasonix tools | [03-reasonix/01-tool-contracts-and-wrapper.md](03-reasonix/01-tool-contracts-and-wrapper.md) |
 | Patch safety | [04-patch-and-verification/02-patch-safety-checker.md](04-patch-and-verification/02-patch-safety-checker.md) |
 | Verification evidence | [04-patch-and-verification/03-verification-gate.md](04-patch-and-verification/03-verification-gate.md) |
 | Compatibility | [05-versioning/02-versioning-and-compatibility.md](05-versioning/02-versioning-and-compatibility.md) |
 | Implementation sequencing | [06-roadmap/03-implementation-plan.md](06-roadmap/03-implementation-plan.md) |
+| Technology selection | [06-roadmap/04-technology-selection.md](06-roadmap/04-technology-selection.md) |
+| v1 MVP scope | [06-roadmap/05-v1-mvp-scope.md](06-roadmap/05-v1-mvp-scope.md) |
+| Runtime core API | [06-roadmap/06-runtime-core-api.md](06-roadmap/06-runtime-core-api.md) |
 
 ## 当前工程状态
 
@@ -126,6 +136,7 @@ Deterministic Multi-Agent Runtime Spec: complete
 Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
+v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
 Safe autonomous operation: blocked until runtime engines and conformance tests are implemented
 ```
 

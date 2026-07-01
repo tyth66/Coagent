@@ -22,6 +22,15 @@ reasonix.propose_patch
 reasonix.test_plan
 ```
 
+v1 public MCP surface exposes only:
+
+```text
+reasonix.review_diff
+```
+
+The remaining tools are post-v1 contracts until their Runtime gates and
+conformance tests exist.
+
 工具命名规则：
 
 1. 使用小写。
@@ -58,8 +67,8 @@ reasonix.security_audit
 {
   "name": "reasonix.review_diff",
   "description": "Review a Codex-produced git diff for correctness, security, concurrency, regression risk, and test coverage. Read-only by default.",
-  "inputSchema": {},
-  "outputSchema": {}
+  "inputSchema": "review_diff_input_v1",
+  "outputSchema": "review_result_v1"
 }
 ```
 
@@ -81,6 +90,7 @@ reasonix.security_audit
 
 ```json
 {
+  "schema_version": "review_diff_input_v1",
   "task_id": "TASK-001",
   "request_id": "REQ-20260628-0001",
   "mode": "review_diff",
@@ -131,6 +141,10 @@ reasonix.security_audit
   "output_schema": "review_result_v1"
 }
 ```
+
+For v1, `task_id` and `request_id` may be omitted by the caller only if the
+TypeScript adapter allocates them before calling Rust. Rust always receives both
+fields.
 
 ---
 
@@ -249,6 +263,7 @@ Codex 对实现信心不足
 
 ```json
 {
+  "schema_version": "review_diff_input_v1",
   "task_id": "TASK-001",
   "request_id": "REQ-001",
   "mode": "review_diff",
@@ -619,7 +634,13 @@ Codex 通过 `tools/list` 获取可用工具。
 
 Wrapper 返回工具列表时必须稳定排序。
 
-推荐顺序：
+v1 返回：
+
+```text
+reasonix.review_diff
+```
+
+Post-v1 推荐顺序：
 
 ```text
 reasonix.review_diff
@@ -632,6 +653,14 @@ reasonix.test_plan
 ```
 
 工具列表不应根据普通请求副作用变化。
+v1 不得在 `tools/list` 中声明未实现工具。
+
+Architecture impact:
+
+```text
+No architecture change. This aligns the public MCP surface with the v1 vertical
+slice while preserving the documented post-v1 tool order.
+```
 
 ---
 
@@ -766,17 +795,68 @@ Wrapper 收到 `tools/call` 后必须：
 ```text
 1. 校验 tool name。
 2. 校验 inputSchema。
-3. 校验 task_id / request_id。
+3. 分配或校验 task_id / request_id。
 4. 校验 artifacts 路径存在。
 5. 校验路径没有越权。
 6. 校验 permission_level。
 7. 校验预算。
-8. 构造 Reasonix prompt / task spec。
-9. 启动 Reasonix。
-10. 捕获 stdout / stderr。
-11. 解析输出。
-12. 校验 outputSchema。
-13. 返回 MCP tool result。
+8. 构造 runtime_operation_request_v1。
+9. 通过 JSON-RPC stdio 调用 Rust runtime.evaluate_operation。
+10. 只有 Rust 返回 allow 且 allow decision transaction 已提交后，才构造 Reasonix prompt / task spec。
+11. 以 argv 数组启动 Reasonix；不得通过 shell string 启动。
+12. 捕获 stdout / stderr。
+13. 将原始输出写入 .agent/results 或 .agent/logs artifact。
+14. 调用 Rust runtime.validate_schema 校验 Reasonix 输出。
+15. 校验 task_id / request_id / output_schema / artifact paths 一致。
+16. 返回 MCP tool result。
+```
+
+Architecture impact:
+
+```text
+No architecture change. TypeScript still owns process spawning, but Rust owns
+the allow/deny decision before any Reasonix side effect.
+```
+
+### 10.1.1 Reasonix Invocation Contract
+
+The adapter must invoke Reasonix with a deterministic process contract.
+
+```text
+command:
+  configured executable path, represented as argv[0]
+
+args:
+  explicit argv array; no shell string
+
+cwd:
+  normalized repo root or policy-approved isolated worktree root
+
+env:
+  minimal allowlisted environment only
+
+stdin:
+  generated prompt/task spec
+
+stdout:
+  captured as raw Reasonix output artifact
+
+stderr:
+  captured as diagnostic artifact, not structuredContent
+
+timeout:
+  required per call
+
+network:
+  denied unless Rust policy explicitly allows it
+```
+
+Test contract:
+
+```text
+v1 tests must use a mock Reasonix executable that reads stdin and writes one
+controlled JSON result to stdout. Tests must also cover timeout, malformed JSON,
+stderr-only failure, nonzero exit, and schema mismatch.
 ```
 
 ---

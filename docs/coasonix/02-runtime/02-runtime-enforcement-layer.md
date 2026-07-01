@@ -24,9 +24,18 @@ Runtime Enforcement Layer: required before safe operation
 MVP deployment:
 
 ```text
-Runtime Kernel is embedded inside `reasonix-expert` Wrapper.
-Transport is local STDIO.
-Remote Runtime Service / Reasonix worker pool is deferred.
+TypeScript `reasonix-expert` MCP Adapter is launched by Codex as a local STDIO
+MCP server.
+Rust Runtime Worker is a managed child process of the adapter.
+Rust Runtime Core owns the enforceable safety kernel.
+Remote Runtime Service / Reasonix worker pool is not part of v1.
+```
+
+Architecture impact:
+
+```text
+No architecture change. This aligns older wording with the selected Rust Core +
+TypeScript Adapter + managed worker boundary.
 ```
 
 ## 2. Runtime Boundary
@@ -212,7 +221,7 @@ stopped_by_limit -> delegating_to_reasonix: deny
 
 ### 9.1 Responsibility
 
-Schema Enforcement Layer enforces [../schemas/coasonix-v1.schema.json](../schemas/coasonix-v1.schema.json) using JSON Schema Draft 2020-12.
+Schema Enforcement Layer enforces [../../../schemas/coasonix-v1.schema.json](../../../schemas/coasonix-v1.schema.json) using JSON Schema Draft 2020-12.
 
 It owns:
 

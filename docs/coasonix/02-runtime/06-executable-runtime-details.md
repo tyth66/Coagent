@@ -15,7 +15,7 @@ The rules here refine, but do not replace:
 05-observability-contract.md
 ../03-reasonix/03-cache-engineering-model.md
 ../04-patch-and-verification/*
-../schemas/coasonix-v1.schema.json
+../../../schemas/coasonix-v1.schema.json
 ```
 
 If this document conflicts with a safety rule, the stricter rule wins.
@@ -60,10 +60,10 @@ The runtime must never hash raw user input when a canonical form exists.
 
 ## 2. Schema Request Objects
 
-The canonical registry currently defines result objects and
-`runtime_operation_request_v1`. Until standalone request schemas are added,
-runtime implementations must treat the following request shapes as internal
-schemas owned by the Runtime Kernel.
+The canonical registry defines result objects, `runtime_operation_request_v1`,
+`schema_validation_request_v1`, and `policy_evaluation_request_v1`. Runtime
+implementations must validate these request shapes through the root registry
+before dispatch.
 
 `schema_validation_request_v1`:
 
@@ -129,8 +129,12 @@ Rules:
 4. The result must validate as policy_evaluation_result_v1.
 ```
 
-Future schema work should promote these internal shapes into
-`coasonix-v1.schema.json` without changing their semantics.
+Architecture impact:
+
+```text
+No architecture change. The executable contract now matches the root registry,
+so request validation is a normal schema gate instead of an internal-only shape.
+```
 
 ## 3. Path Matcher Semantics
 
@@ -341,9 +345,15 @@ Reuse gates:
 Cache hits must still emit audit events and must still validate the cached
 payload against the expected schema.
 
+For v1, `reasonix.review_diff` may write cache metadata, but cache-hit reuse
+stays disabled until cache conformance tests prove schema validation, policy
+hash matching, snapshot matching, and audit emission on reuse.
+
 ## 7. Audit Event Taxonomy and Storage
 
-Audit logs must be append-only JSONL. Each line is one `audit_event_v1`.
+Audit events must be append-only records in the repo-local SQLite database
+defined by [07-sqlite-persistence.md](07-sqlite-persistence.md). Each row stores
+one canonical `audit_event_v1`.
 
 Minimum event taxonomy:
 
@@ -382,14 +392,15 @@ schema_shim_applied
 Storage rules:
 
 ```text
-1. Audit files are stored under .agent/audit/<task_id>.jsonl.
-2. The writer opens files in append-only mode.
-3. Existing audit lines must never be rewritten or removed.
-4. Each event includes a monotonic sequence number in details.sequence.
-5. On startup, the writer scans the existing file and resumes at max sequence + 1.
-6. If the existing file contains invalid JSONL, the task enters failed until a
-   human resolves the audit corruption.
-7. Secrets are never embedded; audit events reference artifact paths and hashes.
+1. Audit rows are stored in .agent/coasonix.sqlite.
+2. SQLite triggers reject UPDATE and DELETE on audit_events.
+3. Existing audit rows must never be rewritten or removed.
+4. audit_events.id is the global monotonic database order.
+5. audit_events.task_sequence is monotonic per task.
+6. On startup, the writer resumes at max(task_sequence) + 1 per task.
+7. SQLite corruption blocks side effects until recovery.
+8. Secrets are never embedded; audit events reference artifact paths and hashes.
+9. JSONL export is optional debugging output, not the v1 source of truth.
 ```
 
 Required `details` fields by event family:
@@ -608,8 +619,10 @@ cache:
 
 audit:
   denied operation emits runtime_denied
-  audit sequence is monotonic
-  invalid existing audit log blocks task
+  audit id is globally monotonic
+  audit task_sequence is monotonic per task
+  audit update/delete is rejected
+  SQLite corruption blocks side effects
   secret value is not embedded in audit details
 
 patch:

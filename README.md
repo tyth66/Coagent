@@ -20,9 +20,10 @@ Deterministic Multi-Agent Runtime Spec: complete
 Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
+v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
 Safe autonomous operation: blocked until runtime engines and conformance tests are implemented
 ```
 
 Canonical schema registry:
 
-[docs/coasonix/schemas/coasonix-v1.schema.json](docs/coasonix/schemas/coasonix-v1.schema.json)
+[schemas/coasonix-v1.schema.json](schemas/coasonix-v1.schema.json)

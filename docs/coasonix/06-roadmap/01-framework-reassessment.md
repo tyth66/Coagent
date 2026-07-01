@@ -16,7 +16,7 @@
 5. 安全边界基本成立：权限、patch checker、禁用 sampling/elicitation/resources 已定义。
 6. 上下文边界基本成立：Codex 持有全局上下文，Reasonix 只接收投影上下文。
 7. 验证边界成立：Reasonix 建议必须经过 Codex 验证才能升级为事实。
-8. 审计边界基本成立：关键事件、决策和验证结果需要 JSONL 记录。
+8. 审计边界基本成立：关键事件、决策和验证结果需要 repo-local SQLite append-only 记录。
 ```
 
 剩余工作不在概念层，而在工程实现层：需要把文档中的 state machine runner、schema validator、policy matcher、patch checker、audit writer、observability exporter 和 STDIO Wrapper 转成可运行实现。可执行 runtime 细节已经收束到 `../02-runtime/06-executable-runtime-details.md`，实现时应以该文件作为 matcher、canonicalization、cache、audit、verification 和 approval 的确定性补充契约。
@@ -87,7 +87,7 @@ initialize
 |---|---|---|
 | STDIO transport | strong | Rules defined for stdout/stderr and newline JSON-RPC |
 | HTTP transport | medium | Security requirements defined; no deployment profile yet |
-| tools/list consistency | strong | Seven tools listed and performance_review now defined |
+| tools/list consistency | strong | v1 exposes reasonix.review_diff only; post-v1 tool contracts remain documented |
 | error separation | medium-high | Concept and error_result_v1 registry entry exist; implementation still needed |
 
 ### 3.4 Residual Risk
@@ -98,8 +98,15 @@ The protocol path is ready for an MVP Wrapper. `error_result_v1` is present in t
 
 ### 4.1 Required Tool Set
 
+v1 public MCP tool set:
+
 ```text
 reasonix.review_diff
+```
+
+Post-v1 documented tool contracts:
+
+```text
 reasonix.security_audit
 reasonix.debug_hypothesis
 reasonix.architecture_options
@@ -131,11 +138,11 @@ human_approval_request_v1
 
 | Item | Status | Evidence |
 |---|---|---|
-| Tool inventory | strong | All seven tools have named sections |
+| Tool inventory | strong | v1 tool is implemented first; post-v1 tools have named contract sections |
 | Performance tool | strong | Now defined as performance risk review, not proof |
-| Input envelope | medium | Example exists; standalone envelope schema still missing |
+| Input envelope | medium-high | v1 review_diff_input_v1 exists; post-v1 tool input schemas remain later work |
 | Output envelope | medium-high | Tool result schemas exist; shared envelope semantics still need conformance tests |
-| Registry completeness | medium-high | Required schema names are represented in the v1 registry; request/envelope gaps remain |
+| Registry completeness | medium-high | v1 review input plus runtime request/result schemas are represented; post-v1 tool inputs remain later work |
 
 ### 4.4 Residual Risk
 
@@ -316,7 +323,7 @@ task_started
 
 | Item | Status | Evidence |
 |---|---|---|
-| Audit principle | strong | JSONL audit defined |
+| Audit principle | strong | SQLite append-only audit defined |
 | Required fields | strong | Existing docs list key fields |
 | Event taxonomy | medium-high | Minimum event taxonomy defined; schema enum and implementation missing |
 | Append-only guarantee | medium-high | Append-only storage rules defined; storage enforcement missing |
@@ -405,7 +412,7 @@ Boundary 5: Evidence
 The next implementation work should happen in this order:
 
 ```text
-1. Implement Draft 2020-12 schema validator using ../schemas/coasonix-v1.schema.json.
+1. Implement Draft 2020-12 schema validator using ../../../schemas/coasonix-v1.schema.json.
 2. Implement Global Task State Machine runner.
 3. Implement executable canonicalization, path matcher, shell argv parser, network exception matcher, and cache key builder from ../02-runtime/06-executable-runtime-details.md.
 4. Implement Patch Safety Checker and dry-run/apply transaction contract.
@@ -417,6 +424,10 @@ The next implementation work should happen in this order:
 10. Implement STDIO Wrapper MVP.
 11. Add adversarial tests for prompt injection, path traversal, schema mismatch, secret leakage, concurrency merge, cache invalidation, transaction rollback, runtime deny, shell parser bypass, audit corruption, approval mismatch, and loop limit.
 ```
+
+The v1 implementation boundary is narrowed further in `05-v1-mvp-scope.md`.
+That document defines `v1-core`, `v1-adapter`, and the first read-only
+`reasonix.review_diff` vertical slice.
 
 ## 14. Final Reassessment
 
