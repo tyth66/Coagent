@@ -12,6 +12,7 @@ Start from the documentation index:
 6. [Patch and Verification](docs/coasonix/04-patch-and-verification/01-patch-transaction-model.md)
 7. [Versioning](docs/coasonix/05-versioning/01-schema-contract-and-versioning.md)
 8. [Roadmap](docs/coasonix/06-roadmap/01-framework-reassessment.md)
+9. [v1 Implementation Blueprint](docs/coasonix/06-roadmap/07-v1-implementation-blueprint.md)
 
 Current status:
 
@@ -21,6 +22,7 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
+v1 implementation blueprint: documented
 Safe autonomous operation: blocked until runtime engines and conformance tests are implemented
 ```
 

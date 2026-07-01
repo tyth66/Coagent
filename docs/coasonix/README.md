@@ -42,7 +42,8 @@ Wrapper = MCP Gateway + Runtime Gate + Session Router
 26. [06-roadmap/04-technology-selection.md](06-roadmap/04-technology-selection.md) - Rust Runtime Core + TypeScript MCP Adapter 技术选型
 27. [06-roadmap/05-v1-mvp-scope.md](06-roadmap/05-v1-mvp-scope.md) - v1-core / v1-adapter 第一版实现范围
 28. [06-roadmap/06-runtime-core-api.md](06-roadmap/06-runtime-core-api.md) - Rust Runtime Core API 和数据模型边界
-29. [../../schemas/coasonix-v1.schema.json](../../schemas/coasonix-v1.schema.json) - v1 schema registry
+29. [06-roadmap/07-v1-implementation-blueprint.md](06-roadmap/07-v1-implementation-blueprint.md) - v1 分层实施蓝图、里程碑和测试矩阵
+30. [../../schemas/coasonix-v1.schema.json](../../schemas/coasonix-v1.schema.json) - v1 schema registry
 
 ## 目录结构
 
@@ -87,6 +88,8 @@ Runtime Kernel:
 02-runtime/05-observability-contract.md
 02-runtime/06-executable-runtime-details.md
 02-runtime/07-sqlite-persistence.md
+06-roadmap/06-runtime-core-api.md
+06-roadmap/07-v1-implementation-blueprint.md
 ```
 
 Reasonix Project Controller / Session Router:
@@ -128,6 +131,7 @@ Patch and verification path:
 | Technology selection | [06-roadmap/04-technology-selection.md](06-roadmap/04-technology-selection.md) |
 | v1 MVP scope | [06-roadmap/05-v1-mvp-scope.md](06-roadmap/05-v1-mvp-scope.md) |
 | Runtime core API | [06-roadmap/06-runtime-core-api.md](06-roadmap/06-runtime-core-api.md) |
+| v1 implementation blueprint | [06-roadmap/07-v1-implementation-blueprint.md](06-roadmap/07-v1-implementation-blueprint.md) |
 
 ## 当前工程状态
 
@@ -137,7 +141,8 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
+v1 implementation blueprint: documented
 Safe autonomous operation: blocked until runtime engines and conformance tests are implemented
 ```
 
-下一阶段应将文档中的 Runtime Kernel、state machine runner、schema validator、policy engine、Reasonix Project Controller、Session Pool、Session Router、patch checker、audit writer 和 STDIO Wrapper 转成可运行实现。
+下一阶段应从 `06-roadmap/07-v1-implementation-blueprint.md` 开始，将文档中的 Runtime Kernel、state machine runner、schema validator、policy engine、audit writer、JSON-RPC stdio worker 和 `reasonix.review_diff` MCP Adapter 垂直切片转成可运行实现。
