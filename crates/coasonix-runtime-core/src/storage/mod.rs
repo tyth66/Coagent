@@ -195,7 +195,6 @@ impl RuntimeStore {
         audit: &AuditEventInput,
     ) -> Result<AuditEventRecord, StoreError> {
         let transaction = self.connection.unchecked_transaction()?;
-        insert_runtime_decision(&transaction, decision)?;
         let next_sequence = next_task_sequence(&transaction, &audit.task_id)?;
         transaction.execute(
             "INSERT INTO audit_events (task_id, task_sequence, event_type, summary, payload_json)
@@ -209,11 +208,30 @@ impl RuntimeStore {
             ],
         )?;
         let audit_id = transaction.last_insert_rowid();
+        insert_runtime_decision(&transaction, decision, Some(audit_id))?;
         transaction.commit()?;
         Ok(AuditEventRecord {
             id: audit_id,
             task_sequence: next_sequence,
         })
+    }
+
+    pub fn runtime_decision_audit_event_id(
+        &self,
+        task_id: &str,
+        request_id: &str,
+    ) -> Result<Option<i64>, StoreError> {
+        self.connection
+            .query_row(
+                "SELECT audit_event_id FROM runtime_decisions
+                 WHERE task_id = ?1 AND request_id = ?2
+                 ORDER BY id DESC LIMIT 1",
+                params![task_id, request_id],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .optional()
+            .map(|value| value.flatten())
+            .map_err(StoreError::from)
     }
 
     pub fn runtime_decision_count(
@@ -416,11 +434,12 @@ fn next_task_sequence(connection: &Connection, task_id: &str) -> Result<i64, Sto
 fn insert_runtime_decision(
     connection: &Connection,
     decision: &RuntimeDecisionRecord,
+    audit_event_id: Option<i64>,
 ) -> Result<(), StoreError> {
     connection.execute(
         "INSERT INTO runtime_decisions
-         (task_id, request_id, operation, decision, reasons_json, command_hash)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+         (task_id, request_id, operation, decision, reasons_json, command_hash, audit_event_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             decision.task_id,
             decision.request_id,
@@ -428,7 +447,8 @@ fn insert_runtime_decision(
             runtime_decision_to_str(decision.decision),
             serde_json::to_string(&decision.reasons)
                 .map_err(|error| StoreError::MigrationFailed(error.to_string()))?,
-            decision.command_hash
+            decision.command_hash,
+            audit_event_id
         ],
     )?;
     Ok(())
@@ -527,7 +547,8 @@ const MIGRATIONS: &[(&str, &str)] = &[
             operation TEXT NOT NULL,
             decision TEXT NOT NULL,
             reasons_json TEXT NOT NULL,
-            command_hash TEXT
+            command_hash TEXT,
+            audit_event_id INTEGER REFERENCES audit_events(id)
         );",
     ),
     (

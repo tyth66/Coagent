@@ -1,5 +1,6 @@
 pub mod artifact;
 pub mod canonical;
+pub mod kernel;
 pub mod policy;
 pub mod schema;
 pub mod state;

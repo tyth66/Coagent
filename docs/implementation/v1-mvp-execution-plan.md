@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024, Cargo workspace, Bun, TypeScript ESM, JSON-RPC 2.0 over stdio, JSON Schema 2020-12, SQLite.
 
-**Current Status:** M0, M1, M2, and M3 are implemented, reviewed, verified, and committed in separate local phases. Continue with M4 in a later execution pass.
+**Current Status:** M0, M1, M2, M3, and M4 are implemented, reviewed, verified, and committed in separate local phases. Continue with M5 in a later execution pass.
 
 ---
 
@@ -43,6 +43,7 @@ M0: repository scaffold
 M1: Rust schema and canonicalization foundation
 M2: Rust state, artifact path, shell, and minimum policy foundation
 M3: Rust SQLite persistence and audit foundation
+M4: RuntimeKernel decision merge and persistence composition
 ```
 
 It intentionally does not implement MCP, real Reasonix invocation, patch
@@ -550,12 +551,132 @@ cargo fmt --all -- --check
   exited 0
 ```
 
+## Task 7: RuntimeKernel Decision Merge
+
+**Files:**
+- Modify: `crates/coasonix-runtime-core/src/lib.rs`
+- Modify: `crates/coasonix-runtime-core/src/storage/mod.rs`
+- Create: `crates/coasonix-runtime-core/src/kernel/mod.rs`
+- Test: `crates/coasonix-runtime-core/tests/runtime_kernel.rs`
+
+- [x] **Step 1: Write failing M4 tests**
+
+Test behaviors:
+
+```text
+allow decision contains schema/state/policy engine results
+policy denial beats state allow and is persisted
+state denial beats policy allow
+unknown operation is denied by the schema gate
+runtime_decision_v1 validates against schema registry
+audit event id is attached to persisted runtime decision
+write_audit is centralized through RuntimeKernel
+decision merge precedence matches blueprint
+validate_schema routes through kernel registry
+```
+
+- [x] **Step 2: Verify tests fail**
+
+Run:
+
+```text
+cargo test -p coasonix-runtime-core --test runtime_kernel -- --nocapture
+```
+
+Expected before implementation: tests fail because `kernel` does not exist and
+runtime decisions do not expose their persisted audit event id.
+
+- [x] **Step 3: Implement minimal RuntimeKernel composition**
+
+Implemented:
+
+```text
+RuntimeConfig
+RuntimeKernel::initialize
+RuntimeKernel::validate_schema
+RuntimeKernel::evaluate_operation
+RuntimeKernel::write_audit
+RuntimeKernel::merge_decisions
+RuntimeDecision::to_payload
+EngineResults
+AuditEvent
+AuditWriteResult
+RuntimeStore::runtime_decision_audit_event_id
+runtime_decisions.audit_event_id
+```
+
+`evaluate_operation` now validates the runtime request shape, loads or creates
+task state, evaluates local policy, merges schema/state/policy decisions,
+persists the runtime decision and audit event in one store transaction, attaches
+the audit event id to the returned decision, and advances newly created allowed
+tasks to `running`.
+
+- [x] **Step 4: Verify M4 tests pass**
+
+Run:
+
+```text
+cargo test -p coasonix-runtime-core --test runtime_kernel -- --nocapture
+```
+
+Expected: all RuntimeKernel tests pass.
+
+- [x] **Step 5: Review M4 against blueprint**
+
+Review checks:
+
+```text
+RuntimeKernel owns schema, state, policy, audit, and artifact-gate composition
+evaluate_operation validates runtime_operation_request_v1 before returning
+schema/state/policy engine results are preserved in runtime_decision_v1
+decision precedence matches the blueprint
+policy deny beats fatal_error from other engines
+deny decisions include reasons and are persisted
+runtime decision and audit event are committed together
+persisted runtime decisions reference their audit_event_id
+manual audit writes route through RuntimeKernel
+unknown Reasonix operations are not hidden by runtime-operation mapping
+no worker JSON-RPC, MCP adapter, or real Reasonix invocation was added
+```
+
+- [x] **Step 6: Fix review findings**
+
+Local review found and fixed:
+
+```text
+The initial schema request payload always used operation=call_reasonix_tool,
+which hid unknown Reasonix operations from the schema gate. A regression test
+now requires unknown operations to produce a schema denial; known
+reasonix.review_diff requests are mapped to call_reasonix_tool only at the
+runtime-operation boundary.
+```
+
+- [x] **Step 7: Run full verification and update implementation docs**
+
+Fresh verification after review fixes:
+
+```text
+cargo test --workspace
+  coasonix-runtime-core: 1 smoke, 7 artifact, 5 canonical, 8 policy,
+  8 runtime kernel, 13 schema registry, 12 sqlite store, and 4 state tests
+  passed
+  coasonix-runtime-worker: 0 tests, binary scaffold compiled
+
+bun test
+  packages/reasonix-expert-mcp/src/index.test.ts passed
+
+python -m json.tool schemas/coasonix-v1.schema.json > $null
+  exited 0
+
+cargo fmt --all -- --check
+  exited 0
+```
+
 ## Full v1 Later Milestones
 
 Future execution passes should continue with:
 
 ```text
-M4: RuntimeKernel decision merge
 M5: Rust JSON-RPC worker
 M6: TypeScript worker client
 M7: MCP adapter tools/list and tools/call
