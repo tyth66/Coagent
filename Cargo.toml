@@ -15,5 +15,6 @@ coasonix-runtime-core = { path = "crates/coasonix-runtime-core" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 jsonschema = { version = "0.46.8", default-features = false }
+rusqlite = { version = "0.40.1", features = ["bundled"] }
 sha2 = "0.10"
 thiserror = "2.0"

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024, Cargo workspace, Bun, TypeScript ESM, JSON-RPC 2.0 over stdio, JSON Schema 2020-12, SQLite.
 
-**Current Status:** M0, M1, and M2 are implemented, reviewed, verified, and committed in separate local phases. Continue with M3 in a later execution pass.
+**Current Status:** M0, M1, M2, and M3 are implemented, reviewed, verified, and committed in separate local phases. Continue with M4 in a later execution pass.
 
 ---
 
@@ -42,6 +42,7 @@ This execution pass covers:
 M0: repository scaffold
 M1: Rust schema and canonicalization foundation
 M2: Rust state, artifact path, shell, and minimum policy foundation
+M3: Rust SQLite persistence and audit foundation
 ```
 
 It intentionally does not implement MCP, real Reasonix invocation, patch
@@ -407,12 +408,153 @@ cargo fmt --all -- --check
   exited 0
 ```
 
+## Task 6: SQLite Store and Audit
+
+**Files:**
+- Modify: `Cargo.toml`
+- Modify: `Cargo.lock`
+- Modify: `crates/coasonix-runtime-core/Cargo.toml`
+- Modify: `crates/coasonix-runtime-core/src/lib.rs`
+- Modify: `crates/coasonix-runtime-core/src/state/mod.rs`
+- Create: `crates/coasonix-runtime-core/src/storage/mod.rs`
+- Test: `crates/coasonix-runtime-core/tests/sqlite_store.rs`
+
+- [x] **Step 1: Write failing M3 tests**
+
+Test behaviors:
+
+```text
+database created under .agent/coasonix.sqlite
+foreign keys enabled
+journal_mode WAL, synchronous FULL, busy_timeout 5000
+migrations run in required blueprint order
+failed migration blocks store initialization and removes database file
+audit update rejected
+audit delete rejected
+audit id globally monotonic
+audit task_sequence monotonic per task
+deny decision persisted through decision+audit transaction
+runtime decision and audit commit atomically
+failed audit insert rolls back runtime decision
+state and audit commit atomically
+rollback leaves no partial state transition
+worker restart recovers task state
+stale lock detected on startup
+cache metadata can be recorded while cache reuse remains disabled
+cache corruption denies reuse only
+```
+
+- [x] **Step 2: Verify tests fail**
+
+Run:
+
+```text
+cargo test -p coasonix-runtime-core --test sqlite_store -- --nocapture
+```
+
+Expected before implementation: tests fail because `storage` module does not
+exist.
+
+- [x] **Step 3: Implement minimal SQLite store and audit writer**
+
+Implemented:
+
+```text
+RuntimeStore::initialize
+RuntimeStore::initialize_with_extra_migration
+RuntimeStore::write_audit_event
+RuntimeStore::commit_runtime_decision_with_audit
+RuntimeStore::transition_state_with_audit
+RuntimeStore::upsert_task_state
+RuntimeStore::load_task_state
+RuntimeStore::insert_lock
+RuntimeStore::stale_locks
+RuntimeStore::record_cache_metadata
+RuntimeStore::cache_reuse_allowed
+append-only audit update/delete triggers
+required migration table order
+SQLite PRAGMAs required by the blueprint
+```
+
+`rusqlite` is used with the bundled SQLite feature. Store transactions use
+`TransactionBehavior::Immediate`, so `unchecked_transaction()` begins as
+`BEGIN IMMEDIATE`.
+
+- [x] **Step 4: Verify M3 tests pass**
+
+Run:
+
+```text
+cargo test -p coasonix-runtime-core --test sqlite_store -- --nocapture
+```
+
+Expected: all SQLite store and audit tests pass.
+
+- [x] **Step 5: Review M3 against blueprint**
+
+Review checks:
+
+```text
+SQLite is under .agent/coasonix.sqlite
+required PRAGMAs are applied per opened connection
+all blueprint migration tables are created in order
+audit_events are append-only by trigger
+task_sequence is per-task monotonic and id is global monotonic
+runtime decision and audit commit together
+failed audit insert rolls back runtime decision
+state and audit commit together
+failed audit insert rolls back state update
+deny decisions are persisted
+task state survives store reopen
+stale locks are detected
+cache metadata is recorded but cache-hit reuse stays disabled
+cache corruption denies reuse without breaking the store
+no M4 RuntimeKernel, worker RPC, MCP adapter, or Reasonix integration was added
+```
+
+- [x] **Step 6: Fix review findings**
+
+Local review found and fixed:
+
+```text
+RuntimeStore initially exposed insert_runtime_decision, which could persist a
+decision without an audit event. The public API now requires
+commit_runtime_decision_with_audit for decision persistence.
+
+Transactions initially used rusqlite's default deferred behavior. Store opening
+now sets TransactionBehavior::Immediate so runtime transactions begin as
+BEGIN IMMEDIATE.
+```
+
+An attempted code-review subagent run failed with an external `402 Payment
+Required` provider error, so M3 review was completed locally against the
+blueprint and tests above.
+
+- [x] **Step 7: Run full verification and update implementation docs**
+
+Fresh verification after review fixes:
+
+```text
+cargo test --workspace
+  coasonix-runtime-core: 1 smoke, 7 artifact, 5 canonical, 8 policy,
+  13 schema registry, 12 sqlite store, and 4 state tests passed
+  coasonix-runtime-worker: 0 tests, binary scaffold compiled
+
+bun test
+  packages/reasonix-expert-mcp/src/index.test.ts passed
+
+python -m json.tool schemas/coasonix-v1.schema.json > $null
+  exited 0
+
+cargo fmt --all -- --check
+  exited 0
+```
+
 ## Full v1 Later Milestones
 
 Future execution passes should continue with:
 
 ```text
-M3: SQLite persistence and audit writer
 M4: RuntimeKernel decision merge
 M5: Rust JSON-RPC worker
 M6: TypeScript worker client

@@ -37,6 +37,15 @@ impl TaskState {
         }
     }
 
+    pub fn restore(task_id: impl Into<String>, value: TaskStateValue, reasonix_calls: u32) -> Self {
+        Self {
+            task_id: task_id.into(),
+            value,
+            reasonix_calls,
+            required_verification_gaps: Vec::new(),
+        }
+    }
+
     pub fn task_id(&self) -> &str {
         &self.task_id
     }

@@ -3,6 +3,7 @@ pub mod canonical;
 pub mod policy;
 pub mod schema;
 pub mod state;
+pub mod storage;
 
 #[cfg(test)]
 mod tests {
