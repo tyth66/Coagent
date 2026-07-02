@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024, Cargo workspace, Bun, TypeScript ESM, JSON-RPC 2.0 over stdio, JSON Schema 2020-12, SQLite.
 
-**Current Status:** M0 and M1 are implemented, reviewed, and verified. Continue with M2 in a later execution pass.
+**Current Status:** M0, M1, and M2 are implemented, reviewed, verified, and committed in separate local phases. Continue with M3 in a later execution pass.
 
 ---
 
@@ -41,6 +41,7 @@ This execution pass covers:
 ```text
 M0: repository scaffold
 M1: Rust schema and canonicalization foundation
+M2: Rust state, artifact path, shell, and minimum policy foundation
 ```
 
 It intentionally does not implement MCP, real Reasonix invocation, patch
@@ -273,12 +274,144 @@ Rust 2024 is selected by the blueprint; a rust-toolchain.toml can be added when
 CI/MSRV policy is introduced.
 ```
 
+## Task 5: State, Path, Shell, and Minimum Policy
+
+**Files:**
+- Create: `crates/coasonix-runtime-core/src/state/mod.rs`
+- Create: `crates/coasonix-runtime-core/src/artifact/mod.rs`
+- Create: `crates/coasonix-runtime-core/src/policy/mod.rs`
+- Modify: `crates/coasonix-runtime-core/src/lib.rs`
+- Test: `crates/coasonix-runtime-core/tests/state_machine.rs`
+- Test: `crates/coasonix-runtime-core/tests/artifact_policy.rs`
+- Test: `crates/coasonix-runtime-core/tests/policy_engine.rs`
+
+- [x] **Step 1: Write failing M2 tests**
+
+Test behaviors:
+
+```text
+illegal state transition denied
+terminal state rejects mutation
+completion blocked while required verification gaps exist
+reasonix_calls increments only through runtime-owned decisions
+denied path blocks before read
+absolute path outside repo denied
+.. traversal denied
+symlink escape denied
+Windows case-folded repo path remains repo-local
+denylist beats allowlist
+shell string rejected
+argv substring bypass rejected
+argv extra-argument bypass rejected
+permission mismatch denied
+network request denied by default
+allowed review_diff policy records command hash
+M2 minimum owned types are constructible
+```
+
+- [x] **Step 2: Verify tests fail**
+
+Run:
+
+```text
+cargo test -p coasonix-runtime-core --tests -- --nocapture
+```
+
+Expected before implementation: tests fail because `state`, `artifact`, and
+`policy` modules do not exist.
+
+- [x] **Step 3: Implement minimal M2 runtime gates**
+
+Implemented:
+
+```text
+TaskState
+TaskStateValue
+RuntimeOperationRequest
+RuntimeDecision
+PolicyEvaluationRequest
+PolicyEvaluationResult
+ResourceSet
+PermissionLevel
+RuntimeDecisionValue
+RoutingMetadata
+ArtifactPolicy
+CommandInvocation
+PolicyEngine::review_diff
+```
+
+The M2 implementation remains in memory only. SQLite persistence, audit rows,
+RuntimeKernel composition, worker RPC, MCP adapter behavior, and Reasonix
+invocation remain out of scope until later milestones.
+
+- [x] **Step 4: Verify M2 tests pass**
+
+Run:
+
+```text
+cargo test -p coasonix-runtime-core --tests -- --nocapture
+```
+
+Expected: all state, artifact, and policy tests pass.
+
+- [x] **Step 5: Review M2 against blueprint**
+
+Review checks:
+
+```text
+state machine blocks illegal and terminal transitions
+required completion gaps block completion
+reasonix call counter cannot be advanced by adapter-observed attempts
+path policy rejects traversal, absolute outside paths, and symlink escapes
+denylist is evaluated before allowlist
+Windows case-folding bypass is covered
+shell strings are rejected
+argv[0], argv args, and extra argv bypasses are rejected structurally
+network is denied by default
+permission mismatch is denied
+command hash is recorded for allowed argv
+no M3+ SQLite/audit, worker, MCP, or Reasonix integration was added
+```
+
+- [x] **Step 6: Fix review findings**
+
+Local review found and fixed:
+
+```text
+argv extra arguments were initially allowed after matching argv[0] and argv[1]
+Windows case-folded absolute repo paths were authorized but returned an
+un-normalized path, and case-sensitive relative extraction rejected them
+```
+
+An attempted code-review subagent run failed with an external `402 Payment
+Required` provider error, so M2 review was completed locally against the
+blueprint and tests above.
+
+- [x] **Step 7: Run full verification and update implementation docs**
+
+Fresh verification after review fixes:
+
+```text
+cargo test --workspace
+  coasonix-runtime-core: 1 smoke, 7 artifact, 5 canonical, 8 policy,
+  13 schema registry, and 4 state tests passed
+  coasonix-runtime-worker: 0 tests, binary scaffold compiled
+
+bun test
+  packages/reasonix-expert-mcp/src/index.test.ts passed
+
+python -m json.tool schemas/coasonix-v1.schema.json > $null
+  exited 0
+
+cargo fmt --all -- --check
+  exited 0
+```
+
 ## Full v1 Later Milestones
 
 Future execution passes should continue with:
 
 ```text
-M2: state, path, shell, and minimum policy
 M3: SQLite persistence and audit writer
 M4: RuntimeKernel decision merge
 M5: Rust JSON-RPC worker
