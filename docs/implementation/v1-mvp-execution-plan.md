@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024, Cargo workspace, Bun, TypeScript ESM, JSON-RPC 2.0 over stdio, JSON Schema 2020-12, SQLite.
 
-**Current Status:** M0, M1, M2, M3, M4, M5, and M6 are implemented, reviewed, verified, and committed in separate local phases. Continue with M7 in a later execution pass.
+**Current Status:** M0, M1, M2, M3, M4, M5, M6, and M7 are implemented, reviewed, verified, and committed in separate local phases. Continue with M8 in a later execution pass.
 
 ---
 
@@ -46,6 +46,7 @@ M3: Rust SQLite persistence and audit foundation
 M4: RuntimeKernel decision merge and persistence composition
 M5: Rust JSON-RPC worker
 M6: TypeScript worker client
+M7: MCP adapter tools/list and tools/call gate
 ```
 
 It intentionally does not implement MCP, real Reasonix invocation, patch
@@ -921,12 +922,129 @@ cargo fmt --all -- --check
   exited 0
 ```
 
+## Task 10: MCP Adapter Tools/List and Tools/Call Gate
+
+**Files:**
+- Create: `packages/reasonix-expert-mcp/src/mcp/tools.ts`
+- Test: `packages/reasonix-expert-mcp/src/mcp/tools.test.ts`
+
+- [x] **Step 1: Write failing M7 tests**
+
+Test behaviors:
+
+```text
+tools/list exposes reasonix.review_diff only
+tools/list inputSchema references review_diff_input_v1
+tools/call asks Rust before Reasonix invocation
+denied runtime decision prevents Reasonix invocation
+worker unavailable returns runtime_unavailable and no side effect
+worker crash returns side_effect_not_executed
+valid review_result_v1 becomes structuredContent
+malformed output does not become structuredContent
+uninitialized adapter does not call runtime or Reasonix
+stderr is captured as diagnostic data, not structuredContent
+```
+
+- [x] **Step 2: Verify tests fail**
+
+Run:
+
+```text
+bun test packages/reasonix-expert-mcp/src/mcp/tools.test.ts
+```
+
+Expected before implementation: tests fail because `src/mcp/tools.ts` does not
+exist.
+
+- [x] **Step 3: Implement minimal tools/list and tools/call adapter**
+
+Implemented:
+
+```text
+listTools
+createReasonixToolsAdapter
+reasonix.review_diff tool definition
+review_diff_input_v1 schema reference
+MCP-initialized gate
+adapter-side shape checks for review_diff ergonomics
+runtime.evaluate_operation before Reasonix runner invocation
+deny/unavailable side_effect_not_executed handling
+Reasonix stdout JSON object extraction
+runtime.validate_schema for review_result_v1
+structuredContent for valid review_result_v1
+stderr diagnostic capture outside structuredContent
+```
+
+This phase uses dependency injection for the runtime client and Reasonix runner
+so the adapter gate can be tested without real Reasonix credentials or a real
+MCP transport. It does not expose post-v1 tools.
+
+- [x] **Step 4: Verify M7 tests pass**
+
+Run:
+
+```text
+bun test packages/reasonix-expert-mcp/src/mcp/tools.test.ts
+```
+
+Expected: all MCP tool adapter tests pass.
+
+- [x] **Step 5: Review M7 against blueprint**
+
+Review checks:
+
+```text
+only reasonix.review_diff is listed
+inputSchema references review_diff_input_v1
+tools/call confirms adapter initialization before touching runtime or Reasonix
+unknown tool names do not reach runtime or Reasonix
+runtime.evaluate_operation happens before any Reasonix runner call
+non-allow runtime decisions prevent Reasonix invocation
+runtime_unavailable prevents Reasonix invocation and records side_effect_not_executed
+worker crash/unavailable paths do not execute side effects
+valid review_result_v1 is returned as structuredContent only after runtime.validate_schema
+malformed Reasonix stdout is not returned as structuredContent
+stderr is preserved as diagnostics metadata, not structuredContent
+TypeScript does not decide allow/deny; it only enforces Rust's returned decision
+no real Reasonix executable or full MCP server transport was added
+```
+
+- [x] **Step 6: Fix review findings**
+
+Local review found and fixed:
+
+```text
+The initial adapter defaulted to initialized=true. The default is now
+initialized=false, tests explicitly initialize adapter instances, and an
+uninitialized tools/call regression test proves neither runtime nor Reasonix is
+touched before MCP initialization.
+```
+
+- [x] **Step 7: Run full verification and update implementation docs**
+
+Fresh verification after review fixes:
+
+```text
+cargo test --workspace
+  all Rust workspace tests passed, including 11 json_rpc_worker tests
+
+bun test
+  packages/reasonix-expert-mcp/src/index.test.ts passed
+  packages/reasonix-expert-mcp/src/worker/client.test.ts passed
+  packages/reasonix-expert-mcp/src/mcp/tools.test.ts passed
+
+python -m json.tool schemas/coasonix-v1.schema.json > $null
+  exited 0
+
+cargo fmt --all -- --check
+  exited 0
+```
+
 ## Full v1 Later Milestones
 
 Future execution passes should continue with:
 
 ```text
-M7: MCP adapter tools/list and tools/call
 M8: mock Reasonix review_diff vertical slice
 ```
 
