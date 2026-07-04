@@ -16,6 +16,7 @@ export interface ReasonixRunner {
 export interface ReasonixToolsAdapterOptions {
   runtime: RuntimeClient;
   reasonix: ReasonixRunner;
+  reasonixCommand?: string[];
   initialized?: boolean;
 }
 
@@ -105,7 +106,7 @@ export function createReasonixToolsAdapter(options: ReasonixToolsAdapterOptions)
         decision = asRuntimeDecision(
           await options.runtime.call(
             "runtime.evaluate_operation",
-            runtimeOperationRequest(input.value),
+            runtimeOperationRequest(input.value, options.reasonixCommand),
           ),
         );
       } catch (error) {
@@ -242,7 +243,7 @@ function normalizeReviewDiffInput(
   };
 }
 
-function runtimeOperationRequest(input: ReviewDiffInput) {
+function runtimeOperationRequest(input: ReviewDiffInput, reasonixCommand = ["reasonix", "review-diff"]) {
   return {
     task_id: input.task_id,
     request_id: input.request_id,
@@ -252,7 +253,7 @@ function runtimeOperationRequest(input: ReviewDiffInput) {
       read_paths: artifactReadPaths(input),
       write_paths: [`.agent/results/${input.request_id}.json`],
       network: false,
-      command: ["reasonix", "review-diff"],
+      command: reasonixCommand,
     },
   };
 }

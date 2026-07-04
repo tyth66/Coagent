@@ -1,16 +1,17 @@
-# v1 MVP Execution Plan
+# v1 MVP Completion Summary and MCP Server Next Slice
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Status:** v1 MVP is complete for the Rust-gated
+`reasonix.review_diff` mock vertical slice, and the first follow-up MCP server
+shell slice is implemented locally.
 
-**Goal:** Implement the Coasonix v1 MVP from `docs/coasonix/06-roadmap/07-v1-implementation-blueprint.md`, starting with the Rust-gated runtime core and ending at the mock `reasonix.review_diff` vertical slice.
+**Boundary:** v1 proves the runtime invariant, not the full Coasonix product.
+Rust owns enforceable schema, canonicalization, state, policy, audit, locks,
+SQLite persistence, and runtime decisions. TypeScript owns MCP adaptation,
+worker process supervision, Reasonix process invocation, output normalization,
+and response shaping only.
 
-**Architecture:** Rust owns enforceable schema, canonicalization, state, policy, audit, locks, and runtime decisions. TypeScript owns the MCP adapter and process supervision only, and it invokes Reasonix only after Rust returns `allow`.
-
-**Tech Stack:** Rust 2024, Cargo workspace, Bun, TypeScript ESM, JSON-RPC 2.0 over stdio, JSON Schema 2020-12, SQLite.
-
-**Current Status:** M0 through M8 are implemented, reviewed, verified, and committed in separate local phases. The v1 MVP implementation plan is complete, with final clean-worktree confirmation included in the final audit.
-
----
+**Tech stack:** Rust 2024, Cargo workspace, Bun, TypeScript ESM, JSON-RPC 2.0
+over stdio, JSON Schema 2020-12, SQLite.
 
 ## Source Boundaries
 
@@ -18,1169 +19,347 @@ Project specifications live under:
 
 ```text
 docs/coasonix/
+schemas/coasonix-v1.schema.json
 ```
 
-Implementation plans and code-progress notes live under:
+Runtime implementation lives under:
 
 ```text
-docs/implementation/
+crates/coasonix-runtime-core/
+crates/coasonix-runtime-worker/
+packages/reasonix-expert-mcp/
 ```
 
-Runtime source lives under:
+This file is the compressed implementation status and next-slice handoff. It is
+not a replacement for the source-of-truth architecture documents under
+`docs/coasonix/`.
+
+## Completed v1 MVP Scope
+
+The completed v1 slice covers M0 through M8:
+
+| Milestone | Completed scope | Evidence |
+|---|---|---|
+| M0 | Rust workspace, Bun workspace, package layout | `Cargo.toml`, `package.json`, package scaffolds |
+| M1 | Schema registry, duplicate-key rejection, canonical JSON/hash | `crates/coasonix-runtime-core/src/schema/`, `src/canonical/` |
+| M2 | Task state, artifact path policy, shell/argv policy, minimum policy profile | `src/state/`, `src/artifact/`, `src/policy/` |
+| M3 | Repo-local SQLite store, migrations, append-only audit, locks, cache metadata | `src/storage/` |
+| M4 | `RuntimeKernel` decision merge and evidence persistence | `src/kernel/` |
+| M5 | Rust JSON-RPC stdio runtime worker | `crates/coasonix-runtime-worker/src/main.rs` |
+| M6 | TypeScript runtime worker client | `packages/reasonix-expert-mcp/src/worker/` |
+| M7 | Testable MCP tool adapter for `tools/list` and `tools/call` gate | `packages/reasonix-expert-mcp/src/mcp/tools.ts` |
+| M8 | Mock Reasonix `review_diff` vertical slice | `packages/reasonix-expert-mcp/src/reasonix/` |
+| M9 | Runnable Bun stdio MCP server shell and initialization lifecycle | `packages/reasonix-expert-mcp/src/mcp/server.ts` |
+
+The working v1 flow is:
 
 ```text
-crates/
-packages/
-tests/
+tools/call reasonix.review_diff
+-> TypeScript adapter normalizes input
+-> runtime.evaluate_operation over JSON-RPC stdio
+-> Rust validates schema/state/policy/path/argv
+-> Rust persists runtime_decision + audit_event
+-> TypeScript invokes mock Reasonix only after decision == allow
+-> TypeScript extracts exactly one JSON object from stdout
+-> runtime.validate_schema validates review_result_v1
+-> Rust persists schema validation evidence
+-> TypeScript returns MCP-style structuredContent only for valid output
 ```
 
-## Current Execution Scope
+## Verified Behavior
 
-This execution pass covers:
-
-```text
-M0: repository scaffold
-M1: Rust schema and canonicalization foundation
-M2: Rust state, artifact path, shell, and minimum policy foundation
-M3: Rust SQLite persistence and audit foundation
-M4: RuntimeKernel decision merge and persistence composition
-M5: Rust JSON-RPC worker
-M6: TypeScript worker client
-M7: MCP adapter tools/list and tools/call gate
-M8: mock Reasonix review_diff vertical slice
-```
-
-It intentionally does not implement MCP, real Reasonix invocation, patch
-application, approval UI, remote HTTP, or post-v1 `reasonix.*` tools.
-
-## Task 1: Scaffold Workspaces
-
-**Files:**
-- Create: `Cargo.toml`
-- Create: `Cargo.lock`
-- Create: `.gitignore`
-- Create: `crates/coasonix-runtime-core/Cargo.toml`
-- Create: `crates/coasonix-runtime-core/src/lib.rs`
-- Create: `crates/coasonix-runtime-core/src/schema/mod.rs`
-- Create: `crates/coasonix-runtime-core/src/canonical/mod.rs`
-- Create: `crates/coasonix-runtime-worker/Cargo.toml`
-- Create: `crates/coasonix-runtime-worker/src/main.rs`
-- Create: `package.json`
-- Create: `bun.lock`
-- Create: `packages/reasonix-expert-mcp/package.json`
-- Create: `packages/reasonix-expert-mcp/src/index.ts`
-
-- [x] **Step 1: Write scaffold smoke tests**
-
-Add minimal Rust and TypeScript tests that fail because the workspaces do not
-exist yet:
+The v1 tests cover:
 
 ```text
-cargo test --workspace
-bun test
-```
-
-Expected before scaffold: Cargo cannot find `Cargo.toml`; Bun has no test
-workspace.
-
-- [x] **Step 2: Create minimal workspace files**
-
-Create a Rust workspace with `coasonix-runtime-core` and
-`coasonix-runtime-worker`, plus a Bun workspace with `reasonix-expert-mcp`.
-
-- [x] **Step 3: Run scaffold verification**
-
-Run:
-
-```text
-cargo test --workspace
-bun test
-python -m json.tool schemas/coasonix-v1.schema.json
-```
-
-Expected: all commands exit 0.
-
-## Task 2: Schema Registry and Duplicate-Key Rejection
-
-**Files:**
-- Modify: `crates/coasonix-runtime-core/src/lib.rs`
-- Modify: `crates/coasonix-runtime-core/src/schema/mod.rs`
-- Test: `crates/coasonix-runtime-core/tests/schema_registry.rs`
-
-- [x] **Step 1: Write failing schema tests**
-
-Test behaviors:
-
-```text
-schema registry loads schemas/coasonix-v1.schema.json
-valid review_diff_input_v1 validates
-valid review_result_v1 validates
-valid error_result_v1 validates
-runtime_decision_v1 validates
-schema_validation_result_v1 validates
-wrong schema_version fails
-unknown expected schema fails closed
-output_schema mismatch fails
-unexpected top-level field fails
-duplicate JSON key fails before schema validation
-malformed JSON returns an error without panic
-```
-
-- [x] **Step 2: Verify tests fail**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-core schema_registry -- --nocapture
-```
-
-Expected: tests fail because `SchemaRegistry` does not exist.
-
-- [x] **Step 3: Implement minimal schema registry**
-
-Implement:
-
-```text
-SchemaRegistry::load_from_path
-SchemaRegistry::validate
-parse_json_no_duplicate_keys
-SchemaValidationResult
-SchemaValidationError
-```
-
-- [x] **Step 4: Verify schema tests pass**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-core schema_registry -- --nocapture
-```
-
-Expected: all schema registry tests pass.
-
-## Task 3: Canonical JSON and Hashing
-
-**Files:**
-- Modify: `crates/coasonix-runtime-core/src/canonical/mod.rs`
-- Test: `crates/coasonix-runtime-core/tests/canonical_json.rs`
-
-- [x] **Step 1: Write failing canonicalization tests**
-
-Test behaviors:
-
-```text
-object keys are sorted deterministically
-equivalent object key order produces identical canonical_hash
-different payload content produces different canonical_hash
-arrays preserve order
-non-finite numbers do not enter serde_json::Value
-```
-
-- [x] **Step 2: Verify tests fail**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-core canonical_json -- --nocapture
-```
-
-Expected: tests fail because canonicalization functions do not exist.
-
-- [x] **Step 3: Implement minimal canonicalization**
-
-Implement:
-
-```text
-canonical_json
-canonical_hash
-```
-
-Use SHA-256 and prefix hashes as `sha256:<hex>`.
-
-- [x] **Step 4: Verify canonicalization tests pass**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-core canonical_json -- --nocapture
-```
-
-Expected: all canonical JSON tests pass.
-
-## Task 4: M0/M1 Review and Documentation Update
-
-**Files:**
-- Modify: `docs/implementation/v1-mvp-execution-plan.md`
-- Modify if needed: `docs/coasonix/README.md`
-
-- [x] **Step 1: Run full verification**
-
-Run:
-
-```text
-cargo test --workspace
-bun test
-python -m json.tool schemas/coasonix-v1.schema.json
-git status --short
-```
-
-- [x] **Step 2: Review M0/M1 against blueprint**
-
-Check:
-
-```text
-M0 scaffold exists
-M1 schema tests cover duplicate keys
-M1 canonical tests cover stable hashes
-no MCP or Reasonix integration was added early
-project docs and implementation docs remain separated
-```
-
-- [x] **Step 3: Fix any review findings**
-
-Do not proceed to M2 while Critical or Important review issues remain.
-
-- [x] **Step 4: Update implementation plan checkboxes**
-
-Mark only completed steps. Do not mark future milestones complete.
-
-### M0/M1 Completion Record
-
-Fresh verification after review fixes:
-
-```text
-cargo test --workspace
-  coasonix-runtime-core: 1 smoke, 5 canonical, 13 schema registry tests passed
-  coasonix-runtime-worker: 0 tests, binary scaffold compiled
-
-bun test
-  packages/reasonix-expert-mcp/src/index.test.ts passed
-
-python -m json.tool schemas/coasonix-v1.schema.json > $null
-  exited 0
-
-cargo fmt --all -- --check
-  exited 0
-
-git diff --check
-  exited 0; Git reported only Windows LF-to-CRLF conversion warnings, with no
-  whitespace errors
-```
-
-Review outcome:
-
-```text
-M0/M1 independent review initially requested changes for repository hygiene and
-missing M1 schema coverage. Fixes added .gitignore, Cargo.lock, bun.lock,
-expanded schema/canonical tests, and SchemaValidationResult::to_payload.
-Re-review approved M0/M1 for documentation update and local commit.
-```
-
-Non-blocking notes:
-
-```text
-Worker rpc/lifecycle/dispatch source modules are deferred to M5.
-Rust 2024 is selected by the blueprint; a rust-toolchain.toml can be added when
-CI/MSRV policy is introduced.
-```
-
-## Task 5: State, Path, Shell, and Minimum Policy
-
-**Files:**
-- Create: `crates/coasonix-runtime-core/src/state/mod.rs`
-- Create: `crates/coasonix-runtime-core/src/artifact/mod.rs`
-- Create: `crates/coasonix-runtime-core/src/policy/mod.rs`
-- Modify: `crates/coasonix-runtime-core/src/lib.rs`
-- Test: `crates/coasonix-runtime-core/tests/state_machine.rs`
-- Test: `crates/coasonix-runtime-core/tests/artifact_policy.rs`
-- Test: `crates/coasonix-runtime-core/tests/policy_engine.rs`
-
-- [x] **Step 1: Write failing M2 tests**
-
-Test behaviors:
-
-```text
-illegal state transition denied
-terminal state rejects mutation
-completion blocked while required verification gaps exist
-reasonix_calls increments only through runtime-owned decisions
-denied path blocks before read
-absolute path outside repo denied
-.. traversal denied
-symlink escape denied
-Windows case-folded repo path remains repo-local
-denylist beats allowlist
-shell string rejected
-argv substring bypass rejected
-argv extra-argument bypass rejected
-permission mismatch denied
-network request denied by default
-allowed review_diff policy records command hash
-M2 minimum owned types are constructible
-```
-
-- [x] **Step 2: Verify tests fail**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-core --tests -- --nocapture
-```
-
-Expected before implementation: tests fail because `state`, `artifact`, and
-`policy` modules do not exist.
-
-- [x] **Step 3: Implement minimal M2 runtime gates**
-
-Implemented:
-
-```text
-TaskState
-TaskStateValue
-RuntimeOperationRequest
-RuntimeDecision
-PolicyEvaluationRequest
-PolicyEvaluationResult
-ResourceSet
-PermissionLevel
-RuntimeDecisionValue
-RoutingMetadata
-ArtifactPolicy
-CommandInvocation
-PolicyEngine::review_diff
-```
-
-The M2 implementation remains in memory only. SQLite persistence, audit rows,
-RuntimeKernel composition, worker RPC, MCP adapter behavior, and Reasonix
-invocation remain out of scope until later milestones.
-
-- [x] **Step 4: Verify M2 tests pass**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-core --tests -- --nocapture
-```
-
-Expected: all state, artifact, and policy tests pass.
-
-- [x] **Step 5: Review M2 against blueprint**
-
-Review checks:
-
-```text
-state machine blocks illegal and terminal transitions
-required completion gaps block completion
-reasonix call counter cannot be advanced by adapter-observed attempts
-path policy rejects traversal, absolute outside paths, and symlink escapes
-denylist is evaluated before allowlist
-Windows case-folding bypass is covered
-shell strings are rejected
-argv[0], argv args, and extra argv bypasses are rejected structurally
-network is denied by default
-permission mismatch is denied
-command hash is recorded for allowed argv
-no M3+ SQLite/audit, worker, MCP, or Reasonix integration was added
-```
-
-- [x] **Step 6: Fix review findings**
-
-Local review found and fixed:
-
-```text
-argv extra arguments were initially allowed after matching argv[0] and argv[1]
-Windows case-folded absolute repo paths were authorized but returned an
-un-normalized path, and case-sensitive relative extraction rejected them
-```
-
-An attempted code-review subagent run failed with an external `402 Payment
-Required` provider error, so M2 review was completed locally against the
-blueprint and tests above.
-
-- [x] **Step 7: Run full verification and update implementation docs**
-
-Fresh verification after review fixes:
-
-```text
-cargo test --workspace
-  coasonix-runtime-core: 1 smoke, 7 artifact, 5 canonical, 8 policy,
-  13 schema registry, and 4 state tests passed
-  coasonix-runtime-worker: 0 tests, binary scaffold compiled
-
-bun test
-  packages/reasonix-expert-mcp/src/index.test.ts passed
-
-python -m json.tool schemas/coasonix-v1.schema.json > $null
-  exited 0
-
-cargo fmt --all -- --check
-  exited 0
-```
-
-## Task 6: SQLite Store and Audit
-
-**Files:**
-- Modify: `Cargo.toml`
-- Modify: `Cargo.lock`
-- Modify: `crates/coasonix-runtime-core/Cargo.toml`
-- Modify: `crates/coasonix-runtime-core/src/lib.rs`
-- Modify: `crates/coasonix-runtime-core/src/state/mod.rs`
-- Create: `crates/coasonix-runtime-core/src/storage/mod.rs`
-- Test: `crates/coasonix-runtime-core/tests/sqlite_store.rs`
-
-- [x] **Step 1: Write failing M3 tests**
-
-Test behaviors:
-
-```text
-database created under .agent/coasonix.sqlite
-foreign keys enabled
-journal_mode WAL, synchronous FULL, busy_timeout 5000
-migrations run in required blueprint order
-failed migration blocks store initialization and removes database file
-audit update rejected
-audit delete rejected
-audit id globally monotonic
-audit task_sequence monotonic per task
-deny decision persisted through decision+audit transaction
-runtime decision and audit commit atomically
-failed audit insert rolls back runtime decision
-state and audit commit atomically
-rollback leaves no partial state transition
-worker restart recovers task state
-stale lock detected on startup
-cache metadata can be recorded while cache reuse remains disabled
-cache corruption denies reuse only
-```
-
-- [x] **Step 2: Verify tests fail**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-core --test sqlite_store -- --nocapture
-```
-
-Expected before implementation: tests fail because `storage` module does not
-exist.
-
-- [x] **Step 3: Implement minimal SQLite store and audit writer**
-
-Implemented:
-
-```text
-RuntimeStore::initialize
-RuntimeStore::initialize_with_extra_migration
-RuntimeStore::write_audit_event
-RuntimeStore::commit_runtime_decision_with_audit
-RuntimeStore::transition_state_with_audit
-RuntimeStore::upsert_task_state
-RuntimeStore::load_task_state
-RuntimeStore::insert_lock
-RuntimeStore::stale_locks
-RuntimeStore::record_cache_metadata
-RuntimeStore::cache_reuse_allowed
-append-only audit update/delete triggers
-required migration table order
-SQLite PRAGMAs required by the blueprint
-```
-
-`rusqlite` is used with the bundled SQLite feature. Store transactions use
-`TransactionBehavior::Immediate`, so `unchecked_transaction()` begins as
-`BEGIN IMMEDIATE`.
-
-- [x] **Step 4: Verify M3 tests pass**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-core --test sqlite_store -- --nocapture
-```
-
-Expected: all SQLite store and audit tests pass.
-
-- [x] **Step 5: Review M3 against blueprint**
-
-Review checks:
-
-```text
-SQLite is under .agent/coasonix.sqlite
-required PRAGMAs are applied per opened connection
-all blueprint migration tables are created in order
-audit_events are append-only by trigger
-task_sequence is per-task monotonic and id is global monotonic
-runtime decision and audit commit together
-failed audit insert rolls back runtime decision
-state and audit commit together
-failed audit insert rolls back state update
-deny decisions are persisted
-task state survives store reopen
-stale locks are detected
-cache metadata is recorded but cache-hit reuse stays disabled
-cache corruption denies reuse without breaking the store
-no M4 RuntimeKernel, worker RPC, MCP adapter, or Reasonix integration was added
-```
-
-- [x] **Step 6: Fix review findings**
-
-Local review found and fixed:
-
-```text
-RuntimeStore initially exposed insert_runtime_decision, which could persist a
-decision without an audit event. The public API now requires
-commit_runtime_decision_with_audit for decision persistence.
-
-Transactions initially used rusqlite's default deferred behavior. Store opening
-now sets TransactionBehavior::Immediate so runtime transactions begin as
-BEGIN IMMEDIATE.
-```
-
-An attempted code-review subagent run failed with an external `402 Payment
-Required` provider error, so M3 review was completed locally against the
-blueprint and tests above.
-
-- [x] **Step 7: Run full verification and update implementation docs**
-
-Fresh verification after review fixes:
-
-```text
-cargo test --workspace
-  coasonix-runtime-core: 1 smoke, 7 artifact, 5 canonical, 8 policy,
-  13 schema registry, 12 sqlite store, and 4 state tests passed
-  coasonix-runtime-worker: 0 tests, binary scaffold compiled
-
-bun test
-  packages/reasonix-expert-mcp/src/index.test.ts passed
-
-python -m json.tool schemas/coasonix-v1.schema.json > $null
-  exited 0
-
-cargo fmt --all -- --check
-  exited 0
-```
-
-## Task 7: RuntimeKernel Decision Merge
-
-**Files:**
-- Modify: `crates/coasonix-runtime-core/src/lib.rs`
-- Modify: `crates/coasonix-runtime-core/src/storage/mod.rs`
-- Create: `crates/coasonix-runtime-core/src/kernel/mod.rs`
-- Test: `crates/coasonix-runtime-core/tests/runtime_kernel.rs`
-
-- [x] **Step 1: Write failing M4 tests**
-
-Test behaviors:
-
-```text
-allow decision contains schema/state/policy engine results
-policy denial beats state allow and is persisted
-state denial beats policy allow
-unknown operation is denied by the schema gate
-runtime_decision_v1 validates against schema registry
-audit event id is attached to persisted runtime decision
-write_audit is centralized through RuntimeKernel
-decision merge precedence matches blueprint
-validate_schema routes through kernel registry
-```
-
-- [x] **Step 2: Verify tests fail**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-core --test runtime_kernel -- --nocapture
-```
-
-Expected before implementation: tests fail because `kernel` does not exist and
-runtime decisions do not expose their persisted audit event id.
-
-- [x] **Step 3: Implement minimal RuntimeKernel composition**
-
-Implemented:
-
-```text
-RuntimeConfig
-RuntimeKernel::initialize
-RuntimeKernel::validate_schema
-RuntimeKernel::evaluate_operation
-RuntimeKernel::write_audit
-RuntimeKernel::merge_decisions
-RuntimeDecision::to_payload
-EngineResults
-AuditEvent
-AuditWriteResult
-RuntimeStore::runtime_decision_audit_event_id
-runtime_decisions.audit_event_id
-```
-
-`evaluate_operation` now validates the runtime request shape, loads or creates
-task state, evaluates local policy, merges schema/state/policy decisions,
-persists the runtime decision and audit event in one store transaction, attaches
-the audit event id to the returned decision, and advances newly created allowed
-tasks to `running`.
-
-- [x] **Step 4: Verify M4 tests pass**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-core --test runtime_kernel -- --nocapture
-```
-
-Expected: all RuntimeKernel tests pass.
-
-- [x] **Step 5: Review M4 against blueprint**
-
-Review checks:
-
-```text
-RuntimeKernel owns schema, state, policy, audit, and artifact-gate composition
-evaluate_operation validates runtime_operation_request_v1 before returning
-schema/state/policy engine results are preserved in runtime_decision_v1
-decision precedence matches the blueprint
-policy deny beats fatal_error from other engines
-deny decisions include reasons and are persisted
-runtime decision and audit event are committed together
-persisted runtime decisions reference their audit_event_id
-manual audit writes route through RuntimeKernel
-unknown Reasonix operations are not hidden by runtime-operation mapping
-no worker JSON-RPC, MCP adapter, or real Reasonix invocation was added
-```
-
-- [x] **Step 6: Fix review findings**
-
-Local review found and fixed:
-
-```text
-The initial schema request payload always used operation=call_reasonix_tool,
-which hid unknown Reasonix operations from the schema gate. A regression test
-now requires unknown operations to produce a schema denial; known
-reasonix.review_diff requests are mapped to call_reasonix_tool only at the
-runtime-operation boundary.
-```
-
-- [x] **Step 7: Run full verification and update implementation docs**
-
-Fresh verification after review fixes:
-
-```text
-cargo test --workspace
-  coasonix-runtime-core: 1 smoke, 7 artifact, 5 canonical, 8 policy,
-  8 runtime kernel, 13 schema registry, 12 sqlite store, and 4 state tests
-  passed
-  coasonix-runtime-worker: 0 tests, binary scaffold compiled
-
-bun test
-  packages/reasonix-expert-mcp/src/index.test.ts passed
-
-python -m json.tool schemas/coasonix-v1.schema.json > $null
-  exited 0
-
-cargo fmt --all -- --check
-  exited 0
-```
-
-## Task 8: Rust JSON-RPC Worker
-
-**Files:**
-- Modify: `Cargo.lock`
-- Modify: `crates/coasonix-runtime-worker/Cargo.toml`
-- Modify: `crates/coasonix-runtime-worker/src/main.rs`
-- Test: `crates/coasonix-runtime-worker/tests/json_rpc_worker.rs`
-
-- [x] **Step 1: Write failing M5 tests**
-
-Test behaviors:
-
-```text
-valid initialize succeeds after migrations
-unknown method rejected
-notification rejected
-malformed JSON rejected
-invalid params rejected
-evaluate_operation returns runtime_decision_v1
-validate_schema returns schema_validation_result_v1
-worker stderr does not pollute stdout
-stdout contains JSON-RPC frames only
-worker shutdown is explicit
-runtime.write_audit returns an audit record after initialize
-policy denial still returns a runtime_decision_v1 result, not JSON-RPC success-as-authorization
-```
-
-- [x] **Step 2: Verify tests fail**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-worker --test json_rpc_worker -- --nocapture
-```
-
-Expected before implementation: tests fail because the worker only prints a
-scaffold line to stdout, which is not a JSON-RPC frame.
-
-- [x] **Step 3: Implement minimal JSON-RPC worker**
-
-Implemented:
-
-```text
-line-delimited JSON-RPC 2.0 stdin/stdout loop
-runtime.initialize
-runtime.validate_schema
-runtime.evaluate_operation
-runtime.write_audit
-runtime.shutdown
-Parse error, Invalid Request, Method not found, Invalid params, and runtime_unavailable mappings
-JSON-RPC id to request_id mapping for REQ-* ids
-RuntimeKernel-backed validate/evaluate/audit dispatch
-explicit shutdown response and process exit
-```
-
-The worker does not expose post-v1 methods and does not implement MCP behavior.
-It returns `runtime_decision_v1` as the result for `runtime.evaluate_operation`;
-the future adapter must still require `result.decision == "allow"` before
-treating any call as authorized.
-
-- [x] **Step 4: Verify M5 tests pass**
-
-Run:
-
-```text
-cargo test -p coasonix-runtime-worker --test json_rpc_worker -- --nocapture
-```
-
-Expected: all JSON-RPC worker tests pass.
-
-- [x] **Step 5: Review M5 against blueprint**
-
-Review checks:
-
-```text
-worker is a JSON-RPC 2.0 stdio process, not an MCP server
-stdout contains only JSON-RPC responses
-stderr is not used for ordinary responses
-one input line maps to one complete JSON-RPC frame
-notifications are rejected
-unknown methods return Method not found
-malformed frames return Parse error
-invalid params return Invalid params
-only runtime.initialize, runtime.validate_schema, runtime.evaluate_operation, runtime.write_audit, and runtime.shutdown are exposed
-request id maps directly to request_id for REQ-* ids
-initialize creates the SQLite store through RuntimeKernel migrations
-validate_schema returns schema_validation_result_v1
-evaluate_operation returns runtime_decision_v1
-JSON-RPC success does not by itself authorize side effects
-shutdown is explicit
-no TypeScript worker client, MCP adapter, or real Reasonix invocation was added
-```
-
-- [x] **Step 6: Fix review findings**
-
-Local review found and fixed:
-
-```text
-The first implementation carried an unused runtime_decision_error helper that
-could imply denied runtime decisions should become JSON-RPC errors. It was
-removed so evaluate_operation consistently returns runtime_decision_v1 results,
-leaving authorization to the adapter's future result.decision == allow gate.
-
-Review also added explicit coverage for runtime.write_audit and the acceptance
-gate that policy denial remains a runtime_decision_v1 result rather than a
-JSON-RPC error.
-```
-
-- [x] **Step 7: Run full verification and update implementation docs**
-
-Fresh verification after review fixes:
-
-```text
-cargo test --workspace
-  coasonix-runtime-core: 1 smoke, 7 artifact, 5 canonical, 8 policy,
-  8 runtime kernel, 13 schema registry, 12 sqlite store, and 4 state tests
-  passed
-  coasonix-runtime-worker: 11 json_rpc_worker tests passed; binary compiled
-
-bun test
-  packages/reasonix-expert-mcp/src/index.test.ts passed
-
-python -m json.tool schemas/coasonix-v1.schema.json > $null
-  exited 0
-
-cargo fmt --all -- --check
-  exited 0
-```
-
-## Task 9: TypeScript Worker Client
-
-**Files:**
-- Create: `packages/reasonix-expert-mcp/src/worker/client.ts`
-- Create: `packages/reasonix-expert-mcp/src/worker/protocol.ts`
-- Create: `packages/reasonix-expert-mcp/src/worker/errors.ts`
-- Test: `packages/reasonix-expert-mcp/src/worker/client.test.ts`
-
-- [x] **Step 1: Write failing M6 tests**
-
-Test behaviors:
-
-```text
-JSON-RPC request framing writes one complete request per line
-non JSON-RPC response frames are rejected
-client sends framed requests and receives JSON-RPC results
-shutdown is explicit
-timeout maps to runtime_unavailable and stops the worker
-worker crash maps to runtime_unavailable
-worker JSON-RPC -32008 maps to symbolic runtime_unavailable
-missing worker executable maps to runtime_unavailable
-restart replaces the worker process
-```
-
-- [x] **Step 2: Verify tests fail**
-
-Run:
-
-```text
-bun test packages/reasonix-expert-mcp/src/worker/client.test.ts
-```
-
-Expected before implementation: tests fail because `src/worker/client.ts` and
-`src/worker/protocol.ts` do not exist.
-
-- [x] **Step 3: Implement minimal TypeScript worker client**
-
-Implemented:
-
-```text
-encodeRequestFrame
-parseResponseFrame
-RuntimeWorkerError
-RuntimeWorkerClient.call
-RuntimeWorkerClient.shutdown
-RuntimeWorkerClient.restart
-RuntimeWorkerClient.isRunning
-request timeout cleanup
-worker crash and missing executable handling
-stderr pipe draining so diagnostics cannot block the worker
-JSON-RPC runtime error code mapping to symbolic runtime_* codes
-```
-
-The client owns TypeScript-side process supervision and JSON-RPC framing only.
-It does not implement MCP tools/list, tools/call, Reasonix invocation, or any
-security decision logic.
-
-- [x] **Step 4: Verify M6 tests pass**
-
-Run:
-
-```text
-bun test packages/reasonix-expert-mcp/src/worker/client.test.ts
-```
-
-Expected: all TypeScript worker client tests pass.
-
-- [x] **Step 5: Review M6 against blueprint**
-
-Review checks:
-
-```text
-JSON-RPC frames are one line per request
-malformed/non-JSON-RPC stdout is rejected
-timeout rejects the pending call and stops the worker
-crash rejects pending calls as runtime_unavailable
-missing executable maps to runtime_unavailable
-runtime JSON-RPC errors map to symbolic runtime_* codes
-restart replaces the worker process without resetting request id allocation
-shutdown sends runtime.shutdown and leaves the client not running
-stderr is drained as diagnostics and never treated as structured output
-no MCP adapter, tools/list, tools/call, or Reasonix process invocation was added
-```
-
-- [x] **Step 6: Fix review findings**
-
-Local review found and fixed:
-
-```text
-The first implementation mapped worker JSON-RPC errors to raw numeric strings.
-Runtime error mappings now convert v1 worker codes such as -32008 to symbolic
-runtime_unavailable.
-
-RuntimeWorkerError was split into worker/errors.ts to avoid a protocol/client
-import cycle. shutdown() now resets internal stopping state in a finally block
-if the shutdown RPC fails or times out.
-```
-
-- [x] **Step 7: Run full verification and update implementation docs**
-
-Fresh verification after review fixes:
-
-```text
-cargo test --workspace
-  coasonix-runtime-core and coasonix-runtime-worker Rust tests passed, including
-  11 json_rpc_worker tests
-
-bun test
-  packages/reasonix-expert-mcp/src/index.test.ts passed
-  packages/reasonix-expert-mcp/src/worker/client.test.ts passed
-
-python -m json.tool schemas/coasonix-v1.schema.json > $null
-  exited 0
-
-cargo fmt --all -- --check
-  exited 0
-```
-
-## Task 10: MCP Adapter Tools/List and Tools/Call Gate
-
-**Files:**
-- Create: `packages/reasonix-expert-mcp/src/mcp/tools.ts`
-- Test: `packages/reasonix-expert-mcp/src/mcp/tools.test.ts`
-
-- [x] **Step 1: Write failing M7 tests**
-
-Test behaviors:
-
-```text
-tools/list exposes reasonix.review_diff only
-tools/list inputSchema references review_diff_input_v1
+schema registry loads and validates v1 payloads
+duplicate JSON keys fail before schema validation
+canonical hashes are stable across object key ordering
+illegal or terminal task state transitions are denied
+path traversal, outside-repo paths, symlink escapes, and denylisted paths fail
+shell strings and argv bypasses fail
+network access is denied by default
+runtime decisions and audit events commit atomically
+audit rows are append-only
+JSON-RPC worker exposes only v1 runtime methods
+worker stdout contains JSON-RPC frames only
+TypeScript worker client handles timeout, crash, restart, and unavailable cases
+tools/list exposes only reasonix.review_diff
 tools/call asks Rust before Reasonix invocation
-denied runtime decision prevents Reasonix invocation
-worker unavailable returns runtime_unavailable and no side effect
-worker crash returns side_effect_not_executed
+deny/unavailable paths do not invoke Reasonix
 valid review_result_v1 becomes structuredContent
-malformed output does not become structuredContent
-uninitialized adapter does not call runtime or Reasonix
-stderr is captured as diagnostic data, not structuredContent
+malformed, mismatched, timed-out, or nonzero Reasonix output is rejected
 ```
 
-- [x] **Step 2: Verify tests fail**
-
-Run:
-
-```text
-bun test packages/reasonix-expert-mcp/src/mcp/tools.test.ts
-```
-
-Expected before implementation: tests fail because `src/mcp/tools.ts` does not
-exist.
-
-- [x] **Step 3: Implement minimal tools/list and tools/call adapter**
-
-Implemented:
-
-```text
-listTools
-createReasonixToolsAdapter
-reasonix.review_diff tool definition
-review_diff_input_v1 schema reference
-MCP-initialized gate
-adapter-side shape checks for review_diff ergonomics
-runtime.evaluate_operation before Reasonix runner invocation
-deny/unavailable side_effect_not_executed handling
-Reasonix stdout JSON object extraction
-runtime.validate_schema for review_result_v1
-structuredContent for valid review_result_v1
-stderr diagnostic capture outside structuredContent
-```
-
-This phase uses dependency injection for the runtime client and Reasonix runner
-so the adapter gate can be tested without real Reasonix credentials or a real
-MCP transport. It does not expose post-v1 tools.
-
-- [x] **Step 4: Verify M7 tests pass**
-
-Run:
-
-```text
-bun test packages/reasonix-expert-mcp/src/mcp/tools.test.ts
-```
-
-Expected: all MCP tool adapter tests pass.
-
-- [x] **Step 5: Review M7 against blueprint**
-
-Review checks:
-
-```text
-only reasonix.review_diff is listed
-inputSchema references review_diff_input_v1
-tools/call confirms adapter initialization before touching runtime or Reasonix
-unknown tool names do not reach runtime or Reasonix
-runtime.evaluate_operation happens before any Reasonix runner call
-non-allow runtime decisions prevent Reasonix invocation
-runtime_unavailable prevents Reasonix invocation and records side_effect_not_executed
-worker crash/unavailable paths do not execute side effects
-valid review_result_v1 is returned as structuredContent only after runtime.validate_schema
-malformed Reasonix stdout is not returned as structuredContent
-stderr is preserved as diagnostics metadata, not structuredContent
-TypeScript does not decide allow/deny; it only enforces Rust's returned decision
-no real Reasonix executable or full MCP server transport was added
-```
-
-- [x] **Step 6: Fix review findings**
-
-Local review found and fixed:
-
-```text
-The initial adapter defaulted to initialized=true. The default is now
-initialized=false, tests explicitly initialize adapter instances, and an
-uninitialized tools/call regression test proves neither runtime nor Reasonix is
-touched before MCP initialization.
-```
-
-- [x] **Step 7: Run full verification and update implementation docs**
-
-Fresh verification after review fixes:
+Repository-level verification command set:
 
 ```text
 cargo test --workspace
-  all Rust workspace tests passed, including 11 json_rpc_worker tests
-
 bun test
-  packages/reasonix-expert-mcp/src/index.test.ts passed
-  packages/reasonix-expert-mcp/src/worker/client.test.ts passed
-  packages/reasonix-expert-mcp/src/mcp/tools.test.ts passed
-
 python -m json.tool schemas/coasonix-v1.schema.json > $null
-  exited 0
-
 cargo fmt --all -- --check
-  exited 0
+git diff --check
 ```
 
-## Task 11: Mock Reasonix Review Diff Vertical Slice
+## Explicit Non-Goals Still Out of Scope
 
-**Files:**
-- Modify: `crates/coasonix-runtime-core/src/kernel/mod.rs`
-- Modify: `crates/coasonix-runtime-core/src/storage/mod.rs`
-- Modify: `crates/coasonix-runtime-core/tests/runtime_kernel.rs`
-- Modify: `packages/reasonix-expert-mcp/src/mcp/tools.ts`
-- Create: `packages/reasonix-expert-mcp/src/reasonix/runner.ts`
-- Create: `packages/reasonix-expert-mcp/src/reasonix/output-normalizer.ts`
-- Test: `packages/reasonix-expert-mcp/src/reasonix/vertical-slice.test.ts`
-
-- [x] **Step 1: Write failing M8 tests**
-
-Test behaviors:
+These remain post-v1 and must not be smuggled into the MCP server shell slice:
 
 ```text
-success: valid review_result_v1 returns structuredContent
-markdown-fenced JSON is normalized into structuredContent
-timeout returns isError true
-malformed JSON returns isError true
-multiple JSON objects return isError true
-nonzero exit returns isError true
-stderr-only failure returns isError true
-schema mismatch returns schema_validation_failed
-wrong task_id returns schema_validation_failed
-wrong request_id returns schema_validation_failed
-invalid confidence returns schema_validation_failed
-runtime deny prevents mock Reasonix invocation
-runtime.validate_schema persists schema validation evidence
+real Reasonix credentials
+reasonix.propose_patch
+patch apply
+patch transaction commit
+human approval UI
+network allow exceptions
+remote HTTP transport
+local daemon
+multi-repo worker sharing
+project-level shared session lane reuse
+advanced Project Controller cache reuse
+security_audit/debug/performance/architecture/test_plan tools
+Reasonix write access to Codex worktree
 ```
 
-- [x] **Step 2: Verify tests fail**
+Safe autonomous patch operation is still blocked until patch safety, approval,
+and verification gates are implemented and tested.
 
-Run:
+## Next Slice: Real Runnable MCP Server Shell
+
+This slice is implemented. It turns the tested adapter into a real local MCP
+stdio server entrypoint. It is an operationalization slice, not a new Reasonix
+capability.
+
+### Goal
+
+Implemented a runnable `reasonix-expert-mcp` stdio server that:
 
 ```text
-bun test packages/reasonix-expert-mcp/src/reasonix/vertical-slice.test.ts
-cargo test -p coasonix-runtime-core --test runtime_kernel validate_schema_routes_through_kernel_registry -- --nocapture
+starts under Bun
+initializes exactly one RuntimeWorkerClient
+calls runtime.initialize before tools/call can execute
+serves tools/list and tools/call over MCP stdio
+uses the existing reasonix.review_diff adapter
+shuts down the Rust runtime worker on MCP server close or process termination
+does not expose new tools
+does not bypass Rust runtime decisions
 ```
 
-Expected before implementation: the vertical slice test fails because
-`reasonix/runner.ts` does not exist, and the Rust evidence test fails because
-`RuntimeStore::schema_validation_count` does not exist.
-
-- [x] **Step 3: Implement mock Reasonix runner and output normalization**
-
-Implemented:
+### Proposed Files
 
 ```text
-ReasonixProcessRunner
-extractSingleJsonObject
-markdown-fenced JSON extraction
-Reasonix timeout killing
-stdout/stderr capture
-nonzero exit mapping
-schema_validation_failed for schema mismatch and task/request id mismatch
-RuntimeStore::commit_schema_validation_with_audit
-RuntimeStore::schema_validation_count
-RuntimeKernel::validate_schema evidence persistence
+packages/reasonix-expert-mcp/src/index.ts
+packages/reasonix-expert-mcp/src/mcp/server.ts
+packages/reasonix-expert-mcp/src/config.ts
+packages/reasonix-expert-mcp/src/mcp/server.test.ts
+packages/reasonix-expert-mcp/package.json
 ```
 
-The vertical slice now starts the real Rust worker, initializes RuntimeKernel
-and SQLite, calls the TypeScript tools/call adapter, gates Reasonix invocation
-through `runtime.evaluate_operation`, runs a mock Reasonix executable, validates
-the output through `runtime.validate_schema`, and returns MCP-style
-`structuredContent` only for trusted valid output.
+Keep `src/mcp/tools.ts` as the testable business adapter. `server.ts` should be
+a thin MCP transport wrapper around it.
 
-- [x] **Step 4: Verify M8 tests pass**
+Implementation note: this slice uses a minimal line-delimited JSON-RPC stdio
+server wrapper rather than adding an MCP SDK dependency. The server maps
+`initialize`, `tools/list`, and `tools/call` only.
 
-Run:
+### Configuration Contract
+
+Use environment variables first. CLI args can be added later only if needed.
+
+Required:
 
 ```text
-bun test packages/reasonix-expert-mcp/src/reasonix/vertical-slice.test.ts
-cargo test -p coasonix-runtime-core --test runtime_kernel validate_schema_routes_through_kernel_registry -- --nocapture
+COASONIX_REPO_ROOT
+COASONIX_SCHEMA_PATH
+COASONIX_RUNTIME_WORKER
+one of:
+  COASONIX_REASONIX_COMMAND_JSON
+  COASONIX_REASONIX_COMMAND
 ```
 
-Expected: all M8 vertical-slice and schema-evidence tests pass.
-
-- [x] **Step 5: Review M8 against blueprint**
-
-Review checks:
+Optional:
 
 ```text
-mock Reasonix is a real process invoked only after Rust allow
-mock reads stdin and writes controlled stdout/stderr
-success path returns schema-valid review_result_v1 as structuredContent
-timeout, malformed JSON, multiple JSON objects, nonzero exit, and stderr-only failure return isError true
-schema mismatch, wrong task_id, wrong request_id, and invalid confidence do not become structuredContent
-runtime deny prevents mock Reasonix invocation
-worker unavailable remains covered by M7 and no side effect is executed
-stderr is diagnostic metadata, not structuredContent
-runtime.validate_schema persists schema validation evidence with an audit event
-no real Reasonix credentials, network exceptions, patch apply, or post-v1 tools were added
+COASONIX_RUNTIME_REQUEST_TIMEOUT_MS = 2000
+COASONIX_REASONIX_TIMEOUT_MS = 10000
 ```
 
-- [x] **Step 6: Fix review findings**
-
-Local review found and fixed:
+Rules:
 
 ```text
-RuntimeKernel::validate_schema initially returned validation results without
-persistent evidence. The kernel now records schema_validation_results with an
-audit event, and runtime_kernel tests assert the evidence row exists.
-
-ReasonixProcessRunner initially left its timeout timer armed after normal
-process exit. The timer is now cleared after the race completes.
+fail startup if required config is missing
+resolve paths to absolute paths before runtime.initialize
+do not create fallback repo roots silently
+do not infer schema path from cwd unless an explicit dev-mode test helper does it
+split COASONIX_REASONIX_COMMAND into argv with a structured parser or require JSON argv
+prefer JSON argv if quoting becomes ambiguous on Windows
 ```
 
-- [x] **Step 7: Run full verification and update implementation docs**
+Recommended command format:
 
-Fresh verification after review fixes:
+```text
+COASONIX_REASONIX_COMMAND_JSON=["reasonix","review-diff"]
+```
+
+If both string and JSON forms exist, JSON wins. Do not execute through a shell.
+If the string form is retained, parse it only into argv tokens and reject
+ambiguous quoting instead of falling back to shell execution.
+
+### Initialization Lifecycle
+
+Server startup:
+
+```text
+1. load and validate config
+2. construct RuntimeWorkerClient({ command: [COASONIX_RUNTIME_WORKER], requestTimeoutMs })
+3. call runtime.initialize with repo_root, schema_path, reasonix_executable
+4. construct ReasonixProcessRunner with configured argv and timeout
+5. construct createReasonixToolsAdapter({ initialized: true, runtime, reasonix })
+6. start MCP stdio transport
+7. serve tools/list and tools/call
+```
+
+Important boundary:
+
+```text
+initialized: true is allowed only after runtime.initialize returns success.
+```
+
+If `runtime.initialize` fails:
+
+```text
+do not start serving tools/call
+emit a startup error on stderr
+exit nonzero
+attempt RuntimeWorkerClient.shutdown() if the worker process was started
+```
+
+### Runtime Lifecycle
+
+During MCP operation:
+
+```text
+tools/list delegates to listTools()
+tools/call delegates to adapter.callTool()
+server never calls Reasonix directly
+server never interprets allow/deny directly
+server never writes .agent state directly
+worker client restart remains an explicit future operation, not automatic retry
+```
+
+On shutdown:
+
+```text
+handle normal MCP transport close
+handle SIGINT and SIGTERM
+call RuntimeWorkerClient.shutdown()
+wait for shutdown or timeout
+then exit
+make shutdown idempotent
+avoid writing protocol data to stdout after transport close
+```
+
+On uncaught fatal error:
+
+```text
+attempt RuntimeWorkerClient.shutdown()
+write diagnostic text to stderr only
+exit nonzero
+```
+
+### MCP Method Mapping
+
+The server shell should map only these MCP surfaces:
+
+```text
+initialize / initialized lifecycle from the MCP SDK or equivalent stdio server
+tools/list -> listTools()
+tools/call -> adapter.callTool()
+```
+
+Do not expose resource, prompt, sampling, logging, patch, or approval surfaces in
+this slice.
+
+### Test Plan
+
+Add server-level tests before implementation:
+
+```text
+missing required config exits nonzero and does not serve tools
+startup calls runtime.initialize exactly once before tools/call can run
+runtime.initialize failure exits nonzero and does not invoke Reasonix
+tools/list over MCP stdio exposes only reasonix.review_diff
+tools/call over MCP stdio returns structuredContent for valid mock output
+tools/call deny path does not invoke mock Reasonix
+tools/call malformed output returns isError without structuredContent
+SIGTERM or transport close calls runtime.shutdown
+worker stderr never appears as MCP structuredContent
+server stdout contains MCP protocol frames only
+```
+
+The most valuable end-to-end test should use:
+
+```text
+real Bun server process
+real Rust runtime worker process
+mock Reasonix process
+temporary repo root with .agent/diffs/current.diff
+real schemas/coasonix-v1.schema.json
+```
+
+### Acceptance Gate
+
+This slice is complete when:
+
+```text
+bun run packages/reasonix-expert-mcp/src/index.ts starts a stdio MCP server
+tools/list works through the real server process
+tools/call reasonix.review_diff works through the real server process
+runtime.initialize is required before any tool side effect
+runtime.shutdown runs on server shutdown
+all existing v1 tests still pass
+new server lifecycle tests pass
+```
+
+Current review status:
+
+```text
+TDD red/green completed for server lifecycle tests.
+External code-reviewer subagent was attempted but failed with upstream 402.
+Local detailed review checked startup config, Rust initialization before tools,
+configured Reasonix argv propagation, deny/no-side-effect behavior, stdout
+protocol cleanliness, and transport-close shutdown.
+No Critical or Important review findings remain in this slice.
+```
+
+Current server test evidence:
+
+```text
+bun test packages/reasonix-expert-mcp/src/mcp/server.test.ts
+  missing config exits nonzero without stdout protocol frames
+  tools/list and tools/call work through the real server process
+  runtime deny through the real server does not invoke mock Reasonix
+  transport close exits the server process cleanly
+```
+
+Run before closing the slice:
 
 ```text
 cargo test --workspace
-  all Rust workspace tests passed, including RuntimeKernel schema validation
-  evidence and 11 json_rpc_worker tests
-
 bun test
-  packages/reasonix-expert-mcp/src/index.test.ts passed
-  packages/reasonix-expert-mcp/src/worker/client.test.ts passed
-  packages/reasonix-expert-mcp/src/mcp/tools.test.ts passed
-  packages/reasonix-expert-mcp/src/reasonix/vertical-slice.test.ts passed
-
 python -m json.tool schemas/coasonix-v1.schema.json > $null
-  exited 0
-
 cargo fmt --all -- --check
-  exited 0
+git diff --check
 ```
 
-## Full v1 MVP Status
+## Implementation Principle
 
-M0 through M8 are now complete. The implementation stops at the blueprint's v1
-MVP boundary and keeps explicit non-goals out of scope: no real Reasonix
-credentials, post-v1 tools, patch application, network allow exceptions, remote
-HTTP transport, or local daemon.
+The MCP server shell must preserve the v1 invariant:
 
-Each milestone requires failing tests first, passing tests after implementation,
-review, fixes, and documentation updates before continuing.
+```text
+Every Reasonix-related side effect crosses Rust Runtime schema/state/policy/audit
+gates before execution, and every Reasonix result crosses Rust schema validation
+before it becomes MCP structuredContent for Codex.
+```
+
+If the server makes `reasonix.review_diff` easier to call while weakening that
+invariant, the slice is invalid.
