@@ -1,8 +1,8 @@
 # v1 MVP Completion Summary and MCP Server Next Slice
 
 **Status:** v1 MVP is complete for the Rust-gated
-`reasonix.review_diff` mock vertical slice, and the first follow-up MCP server
-shell slice is implemented locally.
+`reasonix.review_diff` mock vertical slice, the runnable MCP stdio server shell,
+and official MCP SDK client compatibility.
 
 **Boundary:** v1 proves the runtime invariant, not the full Coasonix product.
 Rust owns enforceable schema, canonicalization, state, policy, audit, locks,
@@ -50,6 +50,7 @@ The completed v1 slice covers M0 through M8:
 | M7 | Testable MCP tool adapter for `tools/list` and `tools/call` gate | `packages/reasonix-expert-mcp/src/mcp/tools.ts` |
 | M8 | Mock Reasonix `review_diff` vertical slice | `packages/reasonix-expert-mcp/src/reasonix/` |
 | M9 | Runnable Bun stdio MCP server shell and initialization lifecycle | `packages/reasonix-expert-mcp/src/mcp/server.ts` |
+| M10 | Official MCP SDK client compatibility for `listTools` and `callTool` | `packages/reasonix-expert-mcp/src/mcp/server.test.ts` |
 
 The working v1 flow is:
 
@@ -339,6 +340,34 @@ bun test packages/reasonix-expert-mcp/src/mcp/server.test.ts
   tools/list and tools/call work through the real server process
   runtime deny through the real server does not invoke mock Reasonix
   transport close exits the server process cleanly
+```
+
+## M10: Official MCP SDK Client Compatibility
+
+The server is verified against `@modelcontextprotocol/sdk@1.29.0` as a
+dev-only test dependency. This confirms that the local stdio server is not only
+an internal JSON-RPC harness: the SDK `Client` can connect via
+`StdioClientTransport`, list `reasonix.review_diff`, and call it through the
+Rust-gated path.
+
+The tool definition keeps the canonical schema reference while also declaring
+the JSON Schema object type required by the SDK client:
+
+```text
+inputSchema:
+  type: object
+  $ref: https://coasonix.local/schemas/coasonix-v1.schema.json#/$defs/review_diff_input_v1
+```
+
+Review status for this slice:
+
+```text
+TDD red: SDK client test initially failed because tools/list returned an
+inputSchema with only $ref and no object type.
+Fix: add type: object while preserving the schema registry $ref.
+Local review checked that SDK remains a dev-only test dependency and does not
+enter the runtime server path.
+No Critical or Important review findings remain in this slice.
 ```
 
 Run before closing the slice:

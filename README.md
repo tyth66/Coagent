@@ -22,8 +22,8 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
-v1 implementation blueprint: complete through M8
-v1 MVP implementation: complete for Rust-gated reasonix.review_diff mock vertical slice
+v1 implementation blueprint: complete through M10
+v1 MVP implementation: complete for Rust-gated reasonix.review_diff through a runnable MCP stdio server
 Safe autonomous patch operation: still blocked until patch safety, approval, and verification gates are implemented
 ```
 
@@ -36,7 +36,7 @@ Current implementation entry points:
 ```text
 crates/coasonix-runtime-core/      Rust runtime kernel, schema, policy, state, audit, and storage
 crates/coasonix-runtime-worker/    JSON-RPC stdio worker exposing runtime methods
-packages/reasonix-expert-mcp/      Bun/TypeScript MCP adapter, worker client, and mock Reasonix runner
+packages/reasonix-expert-mcp/      Bun/TypeScript MCP stdio server, adapter, worker client, and mock Reasonix runner
 docs/implementation/               Implementation execution notes and verification evidence
 ```
 

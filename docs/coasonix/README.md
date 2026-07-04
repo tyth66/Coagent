@@ -141,8 +141,8 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
-v1 implementation blueprint: complete through M8
-v1 MVP implementation: complete for Rust-gated reasonix.review_diff mock vertical slice
+v1 implementation blueprint: complete through M10
+v1 MVP implementation: complete for Rust-gated reasonix.review_diff through a runnable MCP stdio server
 Safe autonomous patch operation: still blocked until patch safety, approval, and verification gates are implemented
 ```
 
@@ -151,8 +151,8 @@ Safe autonomous patch operation: still blocked until patch safety, approval, and
 ```text
 ../../crates/coasonix-runtime-core/      Rust RuntimeKernel、schema、policy、state、audit、SQLite storage
 ../../crates/coasonix-runtime-worker/    JSON-RPC stdio Runtime Worker
-../../packages/reasonix-expert-mcp/      TypeScript MCP adapter、worker client、mock Reasonix runner
+../../packages/reasonix-expert-mcp/      TypeScript MCP stdio server、adapter、worker client、mock Reasonix runner
 ../implementation/v1-mvp-execution-plan.md
 ```
 
-当前 v1 已完成的边界是只读 `reasonix.review_diff` 垂直切片。下一阶段不应继续扩展工具列表，除非同步补齐对应 schema、runtime gate、denial cases、malformed-output cases、audit events 和 verification tests。明确仍属 post-v1 的能力包括真实 Reasonix credentials、`reasonix.propose_patch`、patch apply / transaction commit、human approval UI、network allow exceptions、remote HTTP transport 和 local daemon。
+当前 v1 已完成的边界是只读 `reasonix.review_diff` 垂直切片，并且该切片已经可通过本地 MCP stdio server 挂载。下一阶段不应继续扩展工具列表，除非同步补齐对应 schema、runtime gate、denial cases、malformed-output cases、audit events 和 verification tests。明确仍属 post-v1 的能力包括真实 Reasonix credentials、`reasonix.propose_patch`、patch apply / transaction commit、human approval UI、network allow exceptions、remote HTTP transport 和 local daemon。

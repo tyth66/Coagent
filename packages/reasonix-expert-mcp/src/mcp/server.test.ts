@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -85,6 +87,47 @@ describe("reasonix-expert MCP stdio server", () => {
       request_id: "REQ-server-success",
       status: "ok",
     });
+  });
+
+  test("official MCP SDK client can list and call review_diff", async () => {
+    const fixture = createFixture("sdk-success");
+    const workerPath = await runtimeWorkerPath();
+    const reasonix = writeMockReasonix("success");
+    const transport = new StdioClientTransport({
+      command: processExec(),
+      args: [serverEntry],
+      cwd: repoRoot,
+      stderr: "pipe",
+      env: {
+        ...process.env,
+        COASONIX_REPO_ROOT: fixture.repo,
+        COASONIX_SCHEMA_PATH: schemaPath,
+        COASONIX_RUNTIME_WORKER: workerPath,
+        COASONIX_REASONIX_COMMAND_JSON: JSON.stringify([reasonix, "review-diff"]),
+      },
+    });
+    const client = new Client({ name: "coasonix-sdk-test", version: "0.0.0" });
+
+    await client.connect(transport);
+    try {
+      const listed = await client.listTools();
+      expect(listed.tools.map((tool) => tool.name)).toEqual(["reasonix.review_diff"]);
+
+      const result = await client.callTool({
+        name: "reasonix.review_diff",
+        arguments: reviewDiffInput("TASK-sdk-success", "REQ-sdk-success", fixture.repo),
+      });
+
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent).toMatchObject({
+        schema_version: "review_result_v1",
+        task_id: "TASK-sdk-success",
+        request_id: "REQ-sdk-success",
+        status: "ok",
+      });
+    } finally {
+      await client.close();
+    }
   });
 
   test("runtime deny through the real server does not invoke mock Reasonix", async () => {

@@ -69,6 +69,7 @@ export function listTools() {
         name: REVIEW_DIFF_TOOL_NAME,
         description: "Review a prepared diff through the Coasonix runtime gate.",
         inputSchema: {
+          type: "object",
           $ref: REVIEW_DIFF_INPUT_REF,
         },
       },
