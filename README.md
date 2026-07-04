@@ -13,6 +13,7 @@ Start from the documentation index:
 7. [Versioning](docs/coasonix/05-versioning/01-schema-contract-and-versioning.md)
 8. [Roadmap](docs/coasonix/06-roadmap/01-framework-reassessment.md)
 9. [v1 Implementation Blueprint](docs/coasonix/06-roadmap/07-v1-implementation-blueprint.md)
+10. [Codex-Side Gateway Roadmap](docs/implementation/codex-side-gateway-roadmap.md)
 
 Current status:
 
@@ -39,6 +40,13 @@ crates/coasonix-runtime-worker/    JSON-RPC stdio worker exposing runtime method
 packages/reasonix-expert-mcp/      Bun/TypeScript MCP stdio server, adapter, worker client, and mock Reasonix runner
 docs/implementation/               Implementation execution notes and verification evidence
 ```
+
+Next implementation focus:
+
+[docs/implementation/codex-side-gateway-roadmap.md](docs/implementation/codex-side-gateway-roadmap.md)
+
+The next slice should make Coasonix reproducibly installable and diagnosable as
+a Codex MCP gateway before adding Reasonix, MimoCode, or other backend bridges.
 
 Run the local MCP stdio server:
 

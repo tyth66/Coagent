@@ -43,7 +43,8 @@ Wrapper = MCP Gateway + Runtime Gate + Session Router
 27. [06-roadmap/05-v1-mvp-scope.md](06-roadmap/05-v1-mvp-scope.md) - v1-core / v1-adapter 第一版实现范围
 28. [06-roadmap/06-runtime-core-api.md](06-roadmap/06-runtime-core-api.md) - Rust Runtime Core API 和数据模型边界
 29. [06-roadmap/07-v1-implementation-blueprint.md](06-roadmap/07-v1-implementation-blueprint.md) - v1 分层实施蓝图、里程碑和测试矩阵
-30. [../../schemas/coasonix-v1.schema.json](../../schemas/coasonix-v1.schema.json) - v1 schema registry
+30. [../implementation/codex-side-gateway-roadmap.md](../implementation/codex-side-gateway-roadmap.md) - Codex 侧 MCP gateway 安装、healthcheck 和后端 worker contract 路线
+31. [../../schemas/coasonix-v1.schema.json](../../schemas/coasonix-v1.schema.json) - v1 schema registry
 
 ## 目录结构
 
@@ -153,6 +154,12 @@ Safe autonomous patch operation: still blocked until patch safety, approval, and
 ../../crates/coasonix-runtime-worker/    JSON-RPC stdio Runtime Worker
 ../../packages/reasonix-expert-mcp/      TypeScript MCP stdio server、adapter、worker client、mock Reasonix runner
 ../implementation/v1-mvp-execution-plan.md
+../implementation/codex-side-gateway-roadmap.md
 ```
 
 当前 v1 已完成的边界是只读 `reasonix.review_diff` 垂直切片，并且该切片已经可通过本地 MCP stdio server 挂载。下一阶段不应继续扩展工具列表，除非同步补齐对应 schema、runtime gate、denial cases、malformed-output cases、audit events 和 verification tests。明确仍属 post-v1 的能力包括真实 Reasonix credentials、`reasonix.propose_patch`、patch apply / transaction commit、human approval UI、network allow exceptions、remote HTTP transport 和 local daemon。
+
+下一阶段优先做 Codex 侧 gateway 产品化：可复现 `codex mcp add`
+安装、healthcheck、mock/conformance worker，以及后端中立的 agent worker
+contract。Reasonix、MimoCode 和其他智能体应作为后续 backend bridge 接入，
+不应直接牵动 Codex MCP shell、Rust runtime gate 或 schema/audit 核心。

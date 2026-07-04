@@ -34,6 +34,16 @@ packages/reasonix-expert-mcp/
 This file is the compressed implementation handoff. Detailed architecture and
 roadmap source documents remain under `docs/coasonix/`.
 
+Next implementation focus:
+
+```text
+docs/implementation/codex-side-gateway-roadmap.md
+```
+
+The next slice is Codex-side gateway productization: reproducible Codex MCP
+registration, healthcheck, and a backend-neutral worker conformance contract.
+Reasonix, MimoCode, and other agents should enter later as backend bridges.
+
 ## Completed Scope
 
 | Milestone | Completed result | Main files |
@@ -50,6 +60,7 @@ roadmap source documents remain under `docs/coasonix/`.
 | M9 | Runnable Bun stdio MCP server shell and initialization lifecycle | `packages/reasonix-expert-mcp/src/mcp/server.ts` |
 | M10 | Official MCP SDK client compatibility | `packages/reasonix-expert-mcp/src/mcp/server.test.ts` |
 | M11 | Stable startup script and operator-facing environment contract | `packages/reasonix-expert-mcp/package.json`, `README.md` |
+| M12+ | Codex MCP installation, healthcheck, and backend-neutral worker conformance | `docs/implementation/codex-side-gateway-roadmap.md` |
 
 Working v1 call path:
 
