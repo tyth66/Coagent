@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start:mcp": "bun src/index.ts",
     "test": "bun test"
   },
   "devDependencies": {

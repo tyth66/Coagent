@@ -141,7 +141,7 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
-v1 implementation blueprint: complete through M10
+v1 implementation blueprint: complete through M11
 v1 MVP implementation: complete for Rust-gated reasonix.review_diff through a runnable MCP stdio server
 Safe autonomous patch operation: still blocked until patch safety, approval, and verification gates are implemented
 ```

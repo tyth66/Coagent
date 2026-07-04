@@ -22,7 +22,7 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
-v1 implementation blueprint: complete through M10
+v1 implementation blueprint: complete through M11
 v1 MVP implementation: complete for Rust-gated reasonix.review_diff through a runnable MCP stdio server
 Safe autonomous patch operation: still blocked until patch safety, approval, and verification gates are implemented
 ```
@@ -39,6 +39,22 @@ crates/coasonix-runtime-worker/    JSON-RPC stdio worker exposing runtime method
 packages/reasonix-expert-mcp/      Bun/TypeScript MCP stdio server, adapter, worker client, and mock Reasonix runner
 docs/implementation/               Implementation execution notes and verification evidence
 ```
+
+Run the local MCP stdio server:
+
+```powershell
+$env:COASONIX_REPO_ROOT = "D:\path\to\repo"
+$env:COASONIX_SCHEMA_PATH = "D:\Coasonix\schemas\coasonix-v1.schema.json"
+$env:COASONIX_RUNTIME_WORKER = "D:\Coasonix\target\debug\coasonix-runtime-worker.exe"
+$env:COASONIX_REASONIX_COMMAND_JSON = '["reasonix","review-diff"]'
+bun --cwd packages/reasonix-expert-mcp run start:mcp
+```
+
+The server is intentionally narrow: it initializes the Rust runtime worker
+before serving tool calls, exposes only `reasonix.review_diff`, and returns MCP
+`structuredContent` only after Rust validates the Reasonix result schema.
+Use `COASONIX_REASONIX_COMMAND_JSON` to point at the installed Reasonix command
+or at a local mock command when running development smoke tests.
 
 Verification:
 
