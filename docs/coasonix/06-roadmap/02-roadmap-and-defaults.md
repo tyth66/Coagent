@@ -6,6 +6,12 @@
 
 目标：最小可行。
 
+当前状态：v1 MVP 已完成到 `06-roadmap/07-v1-implementation-blueprint.md`
+的 M8。实现包括 Rust Runtime Core、Rust JSON-RPC stdio Runtime Worker、
+TypeScript MCP Adapter / Worker Client，以及 mock Reasonix `review_diff`
+垂直切片。真实 Reasonix credentials、patch apply、remote HTTP 和 local daemon
+仍然是 post-v1。
+
 MVP 工程默认：
 
 ```text

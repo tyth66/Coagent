@@ -374,16 +374,16 @@ Profiling commands can be unsafe if treated like ordinary test commands. They ne
 |---|---|---|
 | Architecture | high | Control and role boundaries are clear |
 | Deterministic runtime spec | high | State, schema, policy, transaction, concurrency, cache, observability, and versioning are defined |
-| Runtime enforcement design | high | Runtime Enforcement Layer, three core engines, and executable matcher/canonicalization details are specified |
-| MCP MVP | medium-high | STDIO path is concrete |
-| Tool contracts | medium-high | Tool list complete; machine-readable v1 schema registry exists |
+| Runtime enforcement design | high | Runtime Enforcement Layer, three core engines, and executable matcher/canonicalization details are specified and implemented for the v1 review slice |
+| MCP MVP | high | STDIO path is implemented through the TypeScript adapter and Rust JSON-RPC worker |
+| Tool contracts | high for v1 | `reasonix.review_diff` is exposed; post-v1 tools remain documented but hidden until gates exist |
 | Context projection | medium-high | Threat model and redaction order defined; projector implementation missing |
 | Patch safety | medium-high | Transaction model and checker rules defined; checker not implemented |
-| Audit | medium-high | Event model and schema anchor exist; storage writer missing |
-| Verification | medium-high | Gate and structured verification schema exist; runner missing |
+| Audit | high for v1 | SQLite append-only audit and runtime/schema validation evidence are implemented for v1 runtime decisions |
+| Verification | medium-high | Gate and structured verification schema exist; post-patch verification runner missing |
 | Human approval | medium-high | Triggers and blocking state machine defined; approval UI/storage missing |
 | Performance review | medium-high | Tool definition and evidence boundary complete; benchmark runner missing |
-| Safe autonomous operation | low | Blocked until Runtime Enforcement Layer implementation and conformance tests exist |
+| Safe autonomous review operation | medium-high | v1 read-only review path has runtime gates and tests; patch/write autonomy remains blocked |
 | Production HTTP | medium-low | Security requirements listed; deployment model not specified |
 
 ## 12. Revised Framework Shape

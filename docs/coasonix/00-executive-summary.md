@@ -18,7 +18,8 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
-Safe autonomous operation: blocked until runtime engines and conformance tests are implemented
+v1 MVP implementation: complete through M8, ending at mock reasonix.review_diff vertical slice
+Post-v1 patch/autonomous write operation: blocked until patch safety, approval, and verification gates are implemented
 ```
 
 ## MVP Defaults
@@ -39,7 +40,7 @@ Safe autonomous operation: blocked until runtime engines and conformance tests a
 
 Reasonix output is advisory. Every Reasonix result must be schema-valid before Codex can consider it. Patch proposals remain data until Codex decision, Patch Safety Checker, Patch Transaction, and Verification Gate allow progress.
 
-Safe autonomous operation remains blocked until the Runtime Enforcement Layer, schema validator, state machine runner, policy engine, session router, patch checker, audit writer, and conformance tests exist.
+The v1 runtime now implements the enforceable read-only review slice: schema validation, task state checks, policy/path/shell gates, append-only audit persistence, a JSON-RPC stdio worker, a TypeScript worker client, and a `reasonix.review_diff` adapter path that invokes a mock Reasonix process only after Rust allows the operation. Autonomous patch operation remains blocked until patch safety, approval, patch transaction, and verification gates are implemented and tested.
 
 ## Implementation Entry Points
 
@@ -62,4 +63,10 @@ Reasonix integration implementer:
 
 Patch/verification implementer:
   04-patch-and-verification/*
+
+Implemented v1 code:
+  ../../crates/coasonix-runtime-core/
+  ../../crates/coasonix-runtime-worker/
+  ../../packages/reasonix-expert-mcp/
+  ../implementation/v1-mvp-execution-plan.md
 ```

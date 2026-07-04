@@ -536,7 +536,8 @@ With this layer specified:
 Design direction: complete
 Deterministic runtime spec: complete
 Runtime enforcement design: complete
-Safe operation: blocked until implementation and conformance tests exist
+v1 runtime implementation: complete for Rust-gated read-only review_diff path
+Autonomous patch operation: blocked until patch safety, approval, transaction, and verification gates exist
 ```
 
-The system can be implemented against this runtime contract. It should not be operated in autonomous patch-generating mode until Runtime Enforcement Layer conformance tests pass.
+The v1 implementation now exercises this runtime contract through the Rust RuntimeKernel, JSON-RPC stdio worker, TypeScript worker client, and mock `reasonix.review_diff` vertical slice. It should not be operated in autonomous patch-generating mode until the post-v1 patch gates and conformance tests pass.

@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is currently a documentation-first specification for Coasonix, a Codex-Orchestrated Reasonix Runtime. The root `README.md` gives the high-level entry point. The canonical documentation lives under `docs/coasonix/`:
+This repository now contains the Coasonix v1 MVP implementation plus its project documentation. Coasonix is a Codex-Orchestrated Reasonix Runtime. The root `README.md` gives the high-level entry point. The canonical project documentation lives under `docs/coasonix/`, while implementation execution notes live under `docs/implementation/`:
 
 - `00-executive-summary.md` summarizes current conclusions and implementation status.
 - `01-architecture/` defines roles, context ownership, MCP communication, and project/session routing.
@@ -12,16 +12,20 @@ This repository is currently a documentation-first specification for Coasonix, a
 - `05-versioning/` defines schema and compatibility policy.
 - `06-roadmap/` records reassessment, defaults, and implementation planning.
 - `schemas/coasonix-v1.schema.json` is the canonical v1 schema registry.
+- `crates/coasonix-runtime-core/` implements the Rust RuntimeKernel, schema registry, canonicalization, state, policy, audit, and SQLite storage.
+- `crates/coasonix-runtime-worker/` implements the JSON-RPC stdio Runtime Worker.
+- `packages/reasonix-expert-mcp/` implements the Bun/TypeScript MCP adapter, Runtime Worker client, and mock Reasonix runner.
 
 ## Build, Test, and Development Commands
 
-There is no application build system yet. Use lightweight checks:
+Use the workspace build and verification commands:
 
 - `git status --short` checks pending edits before and after changes.
+- `cargo test --workspace` runs the Rust runtime core and worker tests.
+- `bun test` runs the TypeScript adapter, worker client, and vertical-slice tests.
 - `python -m json.tool schemas/coasonix-v1.schema.json > $null` verifies the schema file is valid JSON.
-- `git diff -- docs/coasonix` reviews documentation-only changes before commit.
-
-When runtime code is added, document its build and test commands here before relying on them in PRs.
+- `cargo fmt --all -- --check` checks Rust formatting.
+- `git diff --check` checks whitespace errors before commit.
 
 ## Coding Style & Naming Conventions
 
@@ -31,7 +35,7 @@ JSON schema edits should keep two-space indentation, stable key ordering where p
 
 ## Testing Guidelines
 
-For documentation changes, verify links and cross-references manually against `docs/coasonix/README.md`. For schema changes, run the JSON validation command above and inspect affected `$defs` references. When implementation code appears, add focused tests beside the new module or in a clearly named `tests/` tree, and update this guide with the exact command.
+For documentation changes, verify links and cross-references manually against `docs/coasonix/README.md`. For schema changes, run the JSON validation command above and inspect affected `$defs` references. For Rust changes, add focused tests under the relevant crate's `tests/` tree. For TypeScript adapter changes, add tests beside the changed module under `packages/reasonix-expert-mcp/src/`.
 
 ## Commit & Pull Request Guidelines
 
@@ -41,4 +45,4 @@ Pull requests should include a summary, changed documentation areas, schema impa
 
 ## Agent-Specific Instructions
 
-Treat `docs/coasonix/README.md` and `schemas/coasonix-v1.schema.json` as source-of-truth entry points. Keep documentation, schema names, and roadmap status aligned in the same change.
+Treat `docs/coasonix/README.md`, `schemas/coasonix-v1.schema.json`, and `docs/implementation/v1-mvp-execution-plan.md` as source-of-truth entry points for current v1 status. Keep documentation, schema names, roadmap status, and implementation notes aligned in the same change.

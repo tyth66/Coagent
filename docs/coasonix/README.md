@@ -141,8 +141,18 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
-v1 implementation blueprint: documented
-Safe autonomous operation: blocked until runtime engines and conformance tests are implemented
+v1 implementation blueprint: complete through M8
+v1 MVP implementation: complete for Rust-gated reasonix.review_diff mock vertical slice
+Safe autonomous patch operation: still blocked until patch safety, approval, and verification gates are implemented
 ```
 
-下一阶段应从 `06-roadmap/07-v1-implementation-blueprint.md` 开始，将文档中的 Runtime Kernel、state machine runner、schema validator、policy engine、audit writer、JSON-RPC stdio worker 和 `reasonix.review_diff` MCP Adapter 垂直切片转成可运行实现。
+当前实现入口：
+
+```text
+../../crates/coasonix-runtime-core/      Rust RuntimeKernel、schema、policy、state、audit、SQLite storage
+../../crates/coasonix-runtime-worker/    JSON-RPC stdio Runtime Worker
+../../packages/reasonix-expert-mcp/      TypeScript MCP adapter、worker client、mock Reasonix runner
+../implementation/v1-mvp-execution-plan.md
+```
+
+当前 v1 已完成的边界是只读 `reasonix.review_diff` 垂直切片。下一阶段不应继续扩展工具列表，除非同步补齐对应 schema、runtime gate、denial cases、malformed-output cases、audit events 和 verification tests。明确仍属 post-v1 的能力包括真实 Reasonix credentials、`reasonix.propose_patch`、patch apply / transaction commit、human approval UI、network allow exceptions、remote HTTP transport 和 local daemon。
