@@ -23,8 +23,9 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
-v1 implementation blueprint: complete through M11
+v1 implementation blueprint: complete through M12
 v1 MVP implementation: complete for Rust-gated reasonix.review_diff through a runnable MCP stdio server
+Codex-side gateway productization: M12 setup:codex-mcp installer implemented with mock profile and registration verification
 Safe autonomous patch operation: still blocked until patch safety, approval, and verification gates are implemented
 ```
 
@@ -45,8 +46,20 @@ Next implementation focus:
 
 [docs/implementation/codex-side-gateway-roadmap.md](docs/implementation/codex-side-gateway-roadmap.md)
 
-The next slice should make Coasonix reproducibly installable and diagnosable as
-a Codex MCP gateway before adding Reasonix, MimoCode, or other backend bridges.
+The next slice should add a Codex MCP healthcheck before adding Reasonix,
+MimoCode, or other backend bridges.
+
+Install the Coasonix MCP server into Codex with the mock backend profile:
+
+```powershell
+bun run setup:codex-mcp --target-repo D:\path\to\target-repo
+```
+
+The installer builds the Rust runtime worker when needed, registers `coasonix`
+with `codex mcp add`, uses `bun run --silent` for protocol-clean MCP startup,
+and verifies the durable Codex registration with `codex mcp get coasonix` and
+`codex mcp list`. The default backend profile points at the repo-local mock
+worker, not at Reasonix Desktop.
 
 Run the local MCP stdio server:
 

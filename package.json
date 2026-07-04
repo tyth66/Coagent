@@ -6,6 +6,7 @@
     "packages/reasonix-expert-mcp"
   ],
   "scripts": {
+    "setup:codex-mcp": "bun packages/reasonix-expert-mcp/src/codex/setup.ts",
     "test": "bun test"
   },
   "devDependencies": {

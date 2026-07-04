@@ -60,7 +60,8 @@ Reasonix, MimoCode, and other agents should enter later as backend bridges.
 | M9 | Runnable Bun stdio MCP server shell and initialization lifecycle | `packages/reasonix-expert-mcp/src/mcp/server.ts` |
 | M10 | Official MCP SDK client compatibility | `packages/reasonix-expert-mcp/src/mcp/server.test.ts` |
 | M11 | Stable startup script and operator-facing environment contract | `packages/reasonix-expert-mcp/package.json`, `README.md` |
-| M12+ | Codex MCP installation, healthcheck, and backend-neutral worker conformance | `docs/implementation/codex-side-gateway-roadmap.md` |
+| M12 | Codex MCP setup installer with mock backend profile, protocol-clean startup args, and post-add registration verification | `package.json`, `packages/reasonix-expert-mcp/src/codex/`, `packages/reasonix-expert-mcp/src/reasonix/mock-worker.ts`, `bin/coasonix-mock-worker*` |
+| M13+ | Codex MCP healthcheck and backend-neutral worker conformance | `docs/implementation/codex-side-gateway-roadmap.md` |
 
 Working v1 call path:
 
@@ -90,6 +91,28 @@ Stable package command:
 ```powershell
 bun run --silent --cwd=packages/reasonix-expert-mcp start:mcp
 ```
+
+Codex registration command:
+
+```powershell
+bun run setup:codex-mcp --target-repo D:\path\to\target-repo
+```
+
+The setup command:
+
+```text
+builds target/debug/coasonix-runtime-worker(.exe) when missing
+registers a coasonix MCP server with codex mcp add
+uses bun run --silent --cwd=<repo>/packages/reasonix-expert-mcp start:mcp
+sets COASONIX_REPO_ROOT to the explicit target repository
+sets COASONIX_SCHEMA_PATH and COASONIX_RUNTIME_WORKER to stable Coasonix repo paths
+sets COASONIX_REASONIX_COMMAND_JSON to the repo-local mock worker profile
+verifies codex mcp get coasonix and codex mcp list after registration
+```
+
+The current setup profile is intentionally mock-only. Real Reasonix Desktop,
+MimoCode, or other agent bridges must wait for the M13 healthcheck and M14
+backend-neutral worker conformance contract.
 
 Required environment:
 
@@ -219,6 +242,8 @@ transport close shuts the runtime worker down cleanly
 package exposes start:mcp as the stable local server command
 start:mcp invocation is documented with Bun silent mode for protocol-clean stdout
 README documents the minimum runtime environment contract
+setup:codex-mcp builds/registers/verifies a Codex MCP entry with stable paths
+mock profile worker emits one review_result_v1 JSON object over stdout
 ```
 
 Repository verification command set:

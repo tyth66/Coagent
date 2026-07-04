@@ -53,6 +53,18 @@ Add a reproducible installer command:
 bun run setup:codex-mcp
 ```
 
+Current status:
+
+```text
+implemented
+root package exposes setup:codex-mcp
+default backend profile is mock
+installer builds the Rust runtime worker when target/debug output is missing
+installer registers coasonix through codex mcp add
+installer verifies codex mcp get coasonix and codex mcp list after add
+mock worker emits one review_result_v1 JSON object on stdout
+```
+
 The installer should:
 
 ```text
@@ -81,6 +93,27 @@ registered command uses Bun silent mode
 registered env points at stable repo-local paths or explicit user-selected target paths
 no global Codex config entry points at a temporary test repo
 ```
+
+Implemented entrypoints:
+
+```text
+package.json -> setup:codex-mcp
+packages/reasonix-expert-mcp/src/codex/setup.ts
+packages/reasonix-expert-mcp/src/codex/setup.test.ts
+packages/reasonix-expert-mcp/src/reasonix/mock-worker.ts
+bin/coasonix-mock-worker.cmd
+bin/coasonix-mock-worker
+```
+
+Usage:
+
+```powershell
+bun run setup:codex-mcp --target-repo D:\path\to\target-repo
+```
+
+The default command is safe for Codex-side gateway validation because it uses
+the mock worker profile. It does not launch Reasonix Desktop, MimoCode, or any
+other backend agent.
 
 ## M13: Codex MCP Healthcheck
 
