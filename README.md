@@ -53,6 +53,12 @@ contract still uses envelope fields such as `schema_version`, `task_id`, and
 `request_id`. The active plan is to move those fields into Coasonix internals and
 make Reasonix return only the review result.
 
+## Roadmap
+
+The gap analysis from current MVP to a real agent-to-agent delegation system:
+
+[docs/implementation/gaps-to-production.md](docs/implementation/gaps-to-production.md)
+
 ## Active Plan
 
 [docs/implementation/review-diff-agent-collaboration-plan.md](docs/implementation/review-diff-agent-collaboration-plan.md)
@@ -89,4 +95,5 @@ python -m json.tool schemas/coasonix-v1.schema.json > $null
 cargo fmt --all -- --check
 git diff --check
 ```
+
 

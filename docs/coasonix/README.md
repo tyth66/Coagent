@@ -25,7 +25,8 @@ runtime, worker, schema, backend, or MCP protocol details.
 
 1. [00-collaboration-model.md](00-collaboration-model.md) - Canonical role boundaries
 2. [00-executive-summary.md](00-executive-summary.md) - Current status and boundaries
-3. [../implementation/review-diff-agent-collaboration-plan.md](../implementation/review-diff-agent-collaboration-plan.md) - Active forward plan
+3. [../implementation/gaps-to-production.md](../implementation/gaps-to-production.md) - Current gaps to production
+4. [../implementation/review-diff-agent-collaboration-plan.md](../implementation/review-diff-agent-collaboration-plan.md) - Active forward plan
 4. [01-architecture/01-overview-and-roles.md](01-architecture/01-overview-and-roles.md) - Architecture and role details
 5. [01-architecture/02-communication-and-mcp.md](01-architecture/02-communication-and-mcp.md) - MCP communication and wrapper boundary
 6. [03-reasonix/01-tool-contracts-and-wrapper.md](03-reasonix/01-tool-contracts-and-wrapper.md) - Authoritative review_diff tool contract
@@ -61,3 +62,4 @@ additional tools / patch / approval / HTTP:  out of scope
 Old documents describing multi-tool, patch, approval, remote transport, or
 real backend profiles are post-v1 design or historical background. Do not
 expand the tool list until the review_diff pure-result boundary is clean.
+
