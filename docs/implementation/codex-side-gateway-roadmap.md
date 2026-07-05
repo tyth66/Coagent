@@ -304,6 +304,17 @@ documentation before `agent.review_diff` or another alias appears in
 Improve error messages so Codex can explain failures without backend-specific
 guesswork.
 
+Current status:
+
+```text
+implemented
+shared taxonomy lives in packages/reasonix-expert-mcp/src/agent/error-taxonomy.ts
+healthcheck failure records include code and layer
+Agent Worker Contract failure records include code and layer
+operator reports render layer-prefixed error codes
+worker stdout/stderr remain diagnostics only and never become trusted structuredContent
+```
+
 Recommended categories:
 
 ```text
@@ -327,6 +338,15 @@ Acceptance:
 operator-facing errors say which layer failed
 tool results preserve side_effect_not_executed when no backend side effect happened
 worker stdout/stderr diagnostics never become trusted structuredContent
+```
+
+Implemented entrypoints:
+
+```text
+packages/reasonix-expert-mcp/src/agent/error-taxonomy.ts
+packages/reasonix-expert-mcp/src/agent/error-taxonomy.test.ts
+packages/reasonix-expert-mcp/src/codex/health.ts
+packages/reasonix-expert-mcp/src/agent/worker-contract.ts
 ```
 
 ## M17: Backend Profiles

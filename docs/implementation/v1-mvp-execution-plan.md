@@ -64,7 +64,8 @@ Reasonix, MimoCode, and other agents should enter later as backend bridges.
 | M13 | Codex MCP healthcheck with registration, server startup, runtime, tools/list, mock review, and shutdown diagnostics | `packages/reasonix-expert-mcp/src/codex/health.ts`, `packages/reasonix-expert-mcp/src/codex/health.test.ts`, `package.json` |
 | M14 | Backend-neutral Agent Worker Contract conformance for `review-diff` worker stdout/stdin/exit semantics | `packages/reasonix-expert-mcp/src/agent/worker-contract.ts`, `packages/reasonix-expert-mcp/src/agent/worker-contract.test.ts`, `package.json` |
 | M15 | Internal tool naming migration with reserved backend-neutral alias while preserving external v1 `reasonix.review_diff` | `packages/reasonix-expert-mcp/src/agent/naming.ts`, `packages/reasonix-expert-mcp/src/mcp/tools.ts`, `packages/reasonix-expert-mcp/src/mcp/tools.test.ts` |
-| M16+ | Codex-facing error taxonomy and backend profiles | `docs/implementation/codex-side-gateway-roadmap.md` |
+| M16 | Codex-facing error taxonomy with layer mapping in healthcheck and conformance reports | `packages/reasonix-expert-mcp/src/agent/error-taxonomy.ts`, `packages/reasonix-expert-mcp/src/agent/error-taxonomy.test.ts`, `packages/reasonix-expert-mcp/src/codex/health.ts`, `packages/reasonix-expert-mcp/src/agent/worker-contract.ts` |
+| M17+ | Backend profiles | `docs/implementation/codex-side-gateway-roadmap.md` |
 
 Working v1 call path:
 
@@ -165,6 +166,21 @@ backend-neutral alias is reserved internally as agent.review_diff
 runtime operation mapping remains reasonix.review_diff for v1 Rust policy compatibility
 tools/list does not expose agent.review_diff yet
 ```
+
+Codex-facing error taxonomy:
+
+```text
+config -> config_missing
+codex -> codex_mcp_not_registered
+server -> server_startup_failed
+runtime -> runtime_unavailable, runtime_policy_denied, runtime_schema_invalid
+worker -> worker_unavailable, worker_timeout, worker_empty_stdout, worker_nonzero_exit, worker_schema_invalid
+backend -> backend_not_configured
+```
+
+Healthcheck and Agent Worker Contract failure records now carry both `code` and
+`layer`. Worker stdout and stderr remain diagnostics only and never become
+trusted structuredContent.
 
 Required environment:
 
@@ -303,6 +319,8 @@ conformance:agent-worker passes against the repo-local mock worker
 Agent Worker Contract validation rejects timeout, empty stdout, malformed JSON, multiple JSON objects, markdown-fenced JSON, wrong task_id, wrong request_id, schema mismatch, nonzero exit, and invalid confidence
 M15 naming constants preserve reasonix.review_diff externally while reserving agent.review_diff internally
 tools/list still exposes only reasonix.review_diff
+M16 taxonomy maps roadmap error codes to config, codex, server, runtime, worker, and backend layers
+health:codex-mcp and conformance:agent-worker failure records include a layer field
 ```
 
 Repository verification command set:

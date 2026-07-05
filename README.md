@@ -23,9 +23,9 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
-v1 implementation blueprint: complete through M15
+v1 implementation blueprint: complete through M16
 v1 MVP implementation: complete for Rust-gated reasonix.review_diff through a runnable MCP stdio server
-Codex-side gateway productization: M12 setup, M13 healthcheck, M14 Agent Worker Contract conformance, and M15 internal naming migration implemented
+Codex-side gateway productization: M12 setup, M13 healthcheck, M14 Agent Worker Contract conformance, M15 internal naming migration, and M16 error taxonomy implemented
 Safe autonomous patch operation: still blocked until patch safety, approval, and verification gates are implemented
 ```
 
@@ -46,8 +46,8 @@ Next implementation focus:
 
 [docs/implementation/codex-side-gateway-roadmap.md](docs/implementation/codex-side-gateway-roadmap.md)
 
-The next slice should improve Codex-facing error taxonomy and layer-specific
-operator messages.
+The next slice should add explicit backend profiles while keeping the default
+mock profile and runtime gate semantics unchanged.
 
 Install the Coasonix MCP server into Codex with the mock backend profile:
 
@@ -102,6 +102,20 @@ runtime operation mapping for v1: reasonix.review_diff
 
 The backend-neutral alias is internal only for now. It is not exposed in
 `tools/list` until a compatibility path is explicitly added.
+
+Error taxonomy:
+
+```text
+config -> config_missing
+codex -> codex_mcp_not_registered
+server -> server_startup_failed
+runtime -> runtime_unavailable, runtime_policy_denied, runtime_schema_invalid
+worker -> worker_unavailable, worker_timeout, worker_empty_stdout, worker_nonzero_exit, worker_schema_invalid
+backend -> backend_not_configured
+```
+
+Healthcheck and conformance reports carry both `code` and `layer` so Codex can
+explain which boundary failed without trusting worker stdout or stderr.
 
 Run the local MCP stdio server:
 

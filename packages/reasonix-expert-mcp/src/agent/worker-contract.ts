@@ -1,5 +1,7 @@
 import { resolve } from "node:path";
 
+import { ERROR_CODES, errorLayerForCode, type ErrorLayer } from "./error-taxonomy";
+
 export interface ReviewDiffContractInput {
   schema_version: "review_diff_input_v1";
   task_id: string;
@@ -27,6 +29,7 @@ export type AgentWorkerValidationResult =
   | {
       ok: false;
       code: string;
+      layer: ErrorLayer;
       message: string;
     };
 
@@ -34,6 +37,7 @@ export interface AgentWorkerConformanceCheck {
   name: string;
   status: "pass" | "fail";
   code?: string;
+  layer?: ErrorLayer;
   message: string;
 }
 
@@ -59,7 +63,8 @@ export async function runAgentWorkerConformance(
     const check = {
       name: "success",
       status: "fail" as const,
-      code: "worker_unavailable",
+      code: ERROR_CODES.WORKER_UNAVAILABLE,
+      layer: errorLayerForCode(ERROR_CODES.WORKER_UNAVAILABLE),
       message: formatError(error),
     };
     return {
@@ -79,6 +84,7 @@ export async function runAgentWorkerConformance(
         name: "success",
         status: "fail",
         code: validation.code,
+        layer: validation.layer,
         message: validation.message,
       };
 
@@ -94,35 +100,35 @@ export function validateAgentWorkerReviewResult(
   run: AgentWorkerRunResult,
 ): AgentWorkerValidationResult {
   if (run.timedOut) {
-    return invalid("worker_timeout", "worker did not exit before timeout");
+    return invalid(ERROR_CODES.WORKER_TIMEOUT, "worker did not exit before timeout");
   }
   if (run.exitCode !== 0) {
-    return invalid("worker_nonzero_exit", `worker exited with ${run.exitCode}`);
+    return invalid(ERROR_CODES.WORKER_NONZERO_EXIT, `worker exited with ${run.exitCode}`);
   }
 
   const trimmed = run.stdout.trim();
   if (!trimmed) {
-    return invalid("worker_empty_stdout", "worker stdout was empty");
+    return invalid(ERROR_CODES.WORKER_EMPTY_STDOUT, "worker stdout was empty");
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(trimmed);
   } catch {
-    return invalid("worker_malformed_json", "worker stdout must be exactly one JSON object");
+    return invalid(ERROR_CODES.WORKER_MALFORMED_JSON, "worker stdout must be exactly one JSON object");
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return invalid("worker_malformed_json", "worker stdout JSON must be an object");
+    return invalid(ERROR_CODES.WORKER_MALFORMED_JSON, "worker stdout JSON must be an object");
   }
 
   const output = parsed as Record<string, unknown>;
   if (output.task_id !== input.task_id || output.request_id !== input.request_id) {
-    return invalid("worker_identity_mismatch", "worker output task_id/request_id must match input");
+    return invalid(ERROR_CODES.WORKER_IDENTITY_MISMATCH, "worker output task_id/request_id must match input");
   }
 
   const schemaError = reviewResultSchemaError(output);
   if (schemaError) {
-    return invalid("worker_schema_invalid", schemaError);
+    return invalid(ERROR_CODES.WORKER_SCHEMA_INVALID, schemaError);
   }
 
   return { ok: true, value: output };
@@ -131,7 +137,8 @@ export function validateAgentWorkerReviewResult(
 export function formatAgentWorkerConformanceReport(report: AgentWorkerConformanceReport): string {
   const lines = [`Agent Worker Contract conformance: ${report.status}`];
   for (const check of report.checks) {
-    const suffix = check.code ? ` (${check.code})` : "";
+    const layer = check.layer ? `${check.layer}:` : "";
+    const suffix = check.code ? ` (${layer}${check.code})` : "";
     lines.push(`[${check.status}] ${check.name}${suffix} - ${check.message}`);
   }
   return `${lines.join("\n")}\n`;
@@ -228,7 +235,7 @@ function contractInput(): ReviewDiffContractInput {
 }
 
 function invalid(code: string, message: string): AgentWorkerValidationResult {
-  return { ok: false, code, message };
+  return { ok: false, code, layer: errorLayerForCode(code), message };
 }
 
 function formatError(error: unknown): string {

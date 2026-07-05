@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { buildCodexMcpAddCommand, type BackendProfile, type CommandResult } from "./setup";
+import { ERROR_CODES, errorLayerForCode, type ErrorLayer } from "../agent/error-taxonomy";
 import { EXTERNAL_REVIEW_DIFF_TOOL_NAME } from "../agent/naming";
 
 type CheckStatus = "pass" | "fail";
@@ -10,6 +11,7 @@ export interface HealthCheck {
   name: string;
   status: CheckStatus;
   code?: string;
+  layer?: ErrorLayer;
   message?: string;
   diagnostics?: Record<string, unknown>;
 }
@@ -59,7 +61,8 @@ export async function healthCodexMcp(options: HealthOptions): Promise<HealthRepo
 export function formatHealthReport(report: HealthReport): string {
   const lines = [`Coasonix Codex MCP health: ${report.status}`];
   for (const check of report.checks) {
-    const suffix = check.code ? ` (${check.code})` : "";
+    const layer = check.layer ? `${check.layer}:` : "";
+    const suffix = check.code ? ` (${layer}${check.code})` : "";
     const message = check.message ? ` - ${check.message}` : "";
     lines.push(`[${check.status}] ${check.name}${suffix}${message}`);
   }
@@ -74,23 +77,23 @@ async function checkCodexRegistration(
   try {
     getResult = await run(codexCommand, ["mcp", "get", "coasonix"]);
   } catch (error) {
-    return fail("codex_registration", "codex_mcp_not_registered", formatError(error));
+    return fail("codex_registration", ERROR_CODES.CODEX_MCP_NOT_REGISTERED, formatError(error));
   }
   if (getResult.exitCode !== 0) {
-    return fail("codex_registration", "codex_mcp_not_registered", getResult.stderr || getResult.stdout);
+    return fail("codex_registration", ERROR_CODES.CODEX_MCP_NOT_REGISTERED, getResult.stderr || getResult.stdout);
   }
 
   let listResult: CommandResult;
   try {
     listResult = await run(codexCommand, ["mcp", "list"]);
   } catch (error) {
-    return fail("codex_registration", "codex_mcp_not_registered", formatError(error));
+    return fail("codex_registration", ERROR_CODES.CODEX_MCP_NOT_REGISTERED, formatError(error));
   }
   if (listResult.exitCode !== 0) {
-    return fail("codex_registration", "codex_mcp_not_registered", listResult.stderr || listResult.stdout);
+    return fail("codex_registration", ERROR_CODES.CODEX_MCP_NOT_REGISTERED, listResult.stderr || listResult.stdout);
   }
   if (!listResult.stdout.includes("coasonix")) {
-    return fail("codex_registration", "codex_mcp_not_registered", "codex mcp list did not include coasonix");
+    return fail("codex_registration", ERROR_CODES.CODEX_MCP_NOT_REGISTERED, "codex mcp list did not include coasonix");
   }
 
   return pass("codex_registration", "coasonix is registered and listed");
@@ -101,7 +104,7 @@ async function checkGatewaySmoke(options: HealthOptions): Promise<HealthCheck[]>
   const runtimeReady = await ensureRuntimeWorkerForHealth(options);
   if (!runtimeReady.ok) {
     checks.push(pass("server_startup", "server launch was not attempted"));
-    checks.push(fail("runtime_initialize", "runtime_unavailable", runtimeReady.message));
+    checks.push(fail("runtime_initialize", ERROR_CODES.RUNTIME_UNAVAILABLE, runtimeReady.message));
     return checks;
   }
 
@@ -109,7 +112,7 @@ async function checkGatewaySmoke(options: HealthOptions): Promise<HealthCheck[]>
   try {
     launch = buildServerLaunch(options, runtimeReady.workerPath);
   } catch (error) {
-    return [fail("server_startup", "server_startup_failed", formatError(error))];
+    return [fail("server_startup", ERROR_CODES.SERVER_STARTUP_FAILED, formatError(error))];
   }
 
   let child: ReturnType<typeof Bun.spawn>;
@@ -122,7 +125,7 @@ async function checkGatewaySmoke(options: HealthOptions): Promise<HealthCheck[]>
       stderr: "pipe",
     });
   } catch (error) {
-    return [fail("server_startup", "server_startup_failed", formatError(error))];
+    return [fail("server_startup", ERROR_CODES.SERVER_STARTUP_FAILED, formatError(error))];
   }
   checks.push(pass("server_startup", "server process launched"));
 
@@ -134,7 +137,7 @@ async function checkGatewaySmoke(options: HealthOptions): Promise<HealthCheck[]>
       clientInfo: { name: "coasonix-healthcheck", version: "0.0.0" },
     });
     if (initialize.result?.serverInfo?.name !== "reasonix-expert-mcp") {
-      checks.push(fail("runtime_initialize", "server_startup_failed", "initialize returned unexpected serverInfo"));
+      checks.push(fail("runtime_initialize", ERROR_CODES.SERVER_STARTUP_FAILED, "initialize returned unexpected serverInfo"));
       return await finishServer(child, checks);
     }
     checks.push(pass("runtime_initialize", "runtime.initialize completed before MCP initialize response"));
@@ -142,7 +145,7 @@ async function checkGatewaySmoke(options: HealthOptions): Promise<HealthCheck[]>
     const listed = await client.request("tools/list", {});
     const toolNames = listed.result?.tools?.map((tool: { name: string }) => tool.name) ?? [];
     if (JSON.stringify(toolNames) !== JSON.stringify([EXTERNAL_REVIEW_DIFF_TOOL_NAME])) {
-      checks.push(fail("tools_list", "server_startup_failed", `unexpected tools/list result: ${toolNames.join(",")}`));
+      checks.push(fail("tools_list", ERROR_CODES.SERVER_STARTUP_FAILED, `unexpected tools/list result: ${toolNames.join(",")}`));
       return await finishServer(child, checks);
     }
     checks.push(pass("tools_list", "tools/list returned the expected v1 tool set"));
@@ -157,7 +160,7 @@ async function checkGatewaySmoke(options: HealthOptions): Promise<HealthCheck[]>
       return await finishServer(child, checks);
     }
     if (result.result?.structuredContent?.schema_version !== "review_result_v1") {
-      checks.push(fail("mock_review_diff", "worker_schema_invalid", "tools/call did not return review_result_v1"));
+      checks.push(fail("mock_review_diff", ERROR_CODES.WORKER_SCHEMA_INVALID, "tools/call did not return review_result_v1"));
       return await finishServer(child, checks);
     }
     checks.push(pass("mock_review_diff", "mock worker returned valid review_result_v1"));
@@ -288,7 +291,7 @@ async function finishServer(child: ReturnType<typeof Bun.spawn>, checks: HealthC
   if (exitCode === 0) {
     checks.push(pass("runtime_shutdown", stderr ? `shutdown succeeded with diagnostics: ${stderr}` : "shutdown succeeded"));
   } else {
-    checks.push(fail("runtime_shutdown", "server_startup_failed", stderr || `server exited with ${exitCode}`));
+    checks.push(fail("runtime_shutdown", ERROR_CODES.SERVER_STARTUP_FAILED, stderr || `server exited with ${exitCode}`));
   }
   return checks;
 }
@@ -329,23 +332,23 @@ function reviewDiffInput(repoRoot: string) {
 function classifyStartupFailure(message: string, stderr: string): HealthCheck {
   const combined = `${message}\n${stderr}`;
   if (/runtime|worker|coasonix-runtime-worker/i.test(combined)) {
-    return fail("runtime_initialize", "runtime_unavailable", combined.trim());
+    return fail("runtime_initialize", ERROR_CODES.RUNTIME_UNAVAILABLE, combined.trim());
   }
-  return fail("server_startup", "server_startup_failed", combined.trim());
+  return fail("server_startup", ERROR_CODES.SERVER_STARTUP_FAILED, combined.trim());
 }
 
 function classifyBackendFailure(result: { content?: Array<{ text?: string }> }): HealthCheck {
   const text = result.content?.map((item) => item.text ?? "").join("\n") ?? "";
   if (/exited with/i.test(text)) {
-    return fail("mock_review_diff", "worker_nonzero_exit", text);
+    return fail("mock_review_diff", ERROR_CODES.WORKER_NONZERO_EXIT, text);
   }
   if (/timed out/i.test(text)) {
-    return fail("mock_review_diff", "worker_timeout", text);
+    return fail("mock_review_diff", ERROR_CODES.WORKER_TIMEOUT, text);
   }
   if (/schema/i.test(text)) {
-    return fail("mock_review_diff", "worker_schema_invalid", text);
+    return fail("mock_review_diff", ERROR_CODES.WORKER_SCHEMA_INVALID, text);
   }
-  return fail("mock_review_diff", "worker_unavailable", text || "worker failed");
+  return fail("mock_review_diff", ERROR_CODES.WORKER_UNAVAILABLE, text || "worker failed");
 }
 
 function pass(name: string, message?: string): HealthCheck {
@@ -353,7 +356,7 @@ function pass(name: string, message?: string): HealthCheck {
 }
 
 function fail(name: string, code: string, message?: string): HealthCheck {
-  return { name, status: "fail", code, message };
+  return { name, status: "fail", code, layer: errorLayerForCode(code), message };
 }
 
 async function runCommand(
