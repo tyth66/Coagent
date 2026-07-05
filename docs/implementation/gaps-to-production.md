@@ -39,10 +39,10 @@ real findings.
   on stdin, reads the referenced diff file, performs actual code review,
   and returns structured findings on stdout.
 - Or a bridge adapter (e.g., MimoCode, or any external review agent) that
-  translates the Coasonix task format into the backend agent format.
+  translates the Coagent task format into the backend agent format.
 
-**Impact**: This is not a Coasonix code problem — it is a product/external
-dependency. Coasonix provides the protocol, runtime gate, and audit. Reasonix
+**Impact**: This is not a Coagent code problem — it is a product/external
+dependency. Coagent provides the protocol, runtime gate, and audit. Reasonix
 must exist on the other side.
 
 ---
@@ -51,18 +51,18 @@ must exist on the other side.
 
 **Current state**: `review_result_v1` still carries system-envelope fields
 (`schema_version`, `task_id`, `request_id`, `status`) that belong in
-Coasonix wrapper metadata, not in the Reasonix review answer.
+Coagent wrapper metadata, not in the Reasonix review answer.
 
 The `adapter.ts` / `review-diff.ts` handler currently validates identity by
 checking `parsed.value.task_id === input.value.task_id`. If Reasonix stops
-returning `task_id`, this check must move to Coasonix internal wrapper
+returning `task_id`, this check must move to Coagent internal wrapper
 metadata.
 
 **Active plan**: `docs/implementation/review-diff-agent-collaboration-plan.md`
 
 **What to change**:
 - Remove `schema_version`, `task_id`, `request_id`, `status` from the
-  Reasonix output contract (in `schemas/coasonix-v1.schema.json` and
+  Reasonix output contract (in `schemas/coagent-v1.schema.json` and
   `review-diff.ts` `validateOutput()`)
 - Track request identity outside Reasonix result payload (in adapter
   wrapper metadata)
@@ -79,14 +79,14 @@ metadata.
 diff *content*. Reasonix must read the files itself.
 
 **Problem**: This means:
-- Reasonix needs filesystem access beyond what Coasonix controls at runtime
+- Reasonix needs filesystem access beyond what Coagent controls at runtime
   (the Rust PolicyEngine checks paths at MCP-call time, but cannot enforce
   what Reasonix does inside its own process)
 - The task input is not self-contained — you cannot replay a review from the
   audit log alone
 
 **What to change**:
-- Coasonix reads artifact files and embeds their content (or a content hash
+- Coagent reads artifact files and embeds their content (or a content hash
   reference) into the Reasonix task input JSON before spawning the process
 - Or: implement a Reasonix process sandbox that restricts filesystem access
   to the PolicyEngine-approved paths (see Gap 5)
@@ -103,7 +103,7 @@ Codex fixes issues -> asks Reasonix to re-review -> Reasonix sees updated diff
 ```
 
 **What is needed**:
-- Context Projection (design spec in `docs/coasonix/01-architecture/03-context-architecture.md`,
+- Context Projection (design spec in `docs/coagent/01-architecture/03-context-architecture.md`,
   zero implementation): on each iteration, project only the relevant delta
   of context to Reasonix, not the full git history
 - Snapshot management (design spec in `01-architecture/04-project-session-tool-mapping.md`,
@@ -169,15 +169,15 @@ Each new tool requires:
 All documented as design specs with status headers. None have code:
 
 ```text
-Context Projector               docs/coasonix/01-architecture/03-context-architecture.md
-Session/Project routing         docs/coasonix/01-architecture/04-project-session-tool-mapping.md
-Cache engineering               docs/coasonix/03-reasonix/03-cache-engineering-model.md
-Patch safety checker            docs/coasonix/04-patch-and-verification/
-Verification gate               docs/coasonix/04-patch-and-verification/
-Human approval gate             docs/coasonix/04-patch-and-verification/
-Observability (metrics/tracing) docs/coasonix/02-runtime/05-observability-contract.md
-Concurrency/fan-out             docs/coasonix/03-reasonix/02-reasonix-concurrency-model.md
-Schema versioning               docs/coasonix/05-versioning/
+Context Projector               docs/coagent/01-architecture/03-context-architecture.md
+Session/Project routing         docs/coagent/01-architecture/04-project-session-tool-mapping.md
+Cache engineering               docs/coagent/03-reasonix/03-cache-engineering-model.md
+Patch safety checker            docs/coagent/04-patch-and-verification/
+Verification gate               docs/coagent/04-patch-and-verification/
+Human approval gate             docs/coagent/04-patch-and-verification/
+Observability (metrics/tracing) docs/coagent/02-runtime/05-observability-contract.md
+Concurrency/fan-out             docs/coagent/03-reasonix/02-reasonix-concurrency-model.md
+Schema versioning               docs/coagent/05-versioning/
 ```
 
 ---
@@ -186,7 +186,7 @@ Schema versioning               docs/coasonix/05-versioning/
 
 ```
 P0: Build or bridge a real Reasonix
-    └── external dependency, Coasonix is ready on the protocol side
+    └── external dependency, Coagent is ready on the protocol side
 
 P1: Clean up the review_diff result contract
     ├── remove envelope fields from Reasonix output
@@ -210,7 +210,9 @@ P4: Remaining post-v1 tools and design specs
 ```powershell
 cargo test --workspace          # 65 Rust tests
 bun test                        # 91 TypeScript tests
-python -m json.tool schemas/coasonix-v1.schema.json > $null
+python -m json.tool schemas/coagent-v1.schema.json > $null
 cargo fmt --all -- --check
 git diff --check
 ```
+
+

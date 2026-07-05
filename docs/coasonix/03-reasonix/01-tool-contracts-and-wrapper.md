@@ -14,15 +14,15 @@ Rule: Reasonix returns review information only
 
 ```text
 Codex   -> decides to request a diff review
-Coasonix -> validates/gates/translates the request
+Coagent -> validates/gates/translates the request
 Reasonix -> performs the review task
-Coasonix -> wraps the review result for MCP
+Coagent -> wraps the review result for MCP
 Codex   -> makes the final decision
 ```
 
-## Coasonix-Owned Input Envelope
+## Coagent-Owned Input Envelope
 
-The MCP tool input may include Coasonix-owned fields such as:
+The MCP tool input may include Coagent-owned fields such as:
 
 ```text
 goal
@@ -38,12 +38,12 @@ budget
 permission_level
 ```
 
-These fields are how Codex asks Coasonix to delegate a safe task. They are not
+These fields are how Codex asks Coagent to delegate a safe task. They are not
 fields Reasonix must echo back.
 
 ## Reasonix Task Input
 
-Before calling Reasonix, Coasonix should translate the MCP arguments into a task
+Before calling Reasonix, Coagent should translate the MCP arguments into a task
 that is natural for a reviewing agent:
 
 ```text
@@ -85,7 +85,7 @@ Allowed verdicts: `pass`, `needs_fix`, `risky`, `unknown`, `not_applicable`.
 
 ## Fields Reasonix Must NOT Return
 
-These are Coasonix internals. They must not appear in the Reasonix review payload:
+These are Coagent internals. They must not appear in the Reasonix review payload:
 
 ```text
 schema_version
@@ -99,9 +99,9 @@ audit_event_id
 stderr
 ```
 
-## Coasonix Wrapping
+## Coagent Wrapping
 
-Coasonix may wrap Reasonix pure review data into MCP structures:
+Coagent may wrap Reasonix pure review data into MCP structures:
 
 ```text
 content[]
@@ -110,7 +110,7 @@ _meta
 isError
 ```
 
-Coasonix may use internal ids and diagnostics to protect the call path. Those
+Coagent may use internal ids and diagnostics to protect the call path. Those
 fields belong to wrapper metadata and audit records, not to Reasonix review.
 
 ## Transitional Implementation State
@@ -135,3 +135,4 @@ The active migration plan is:
 5. Tests prove malformed review data is rejected.
 6. Docs and schema fixture match the pure review result.
 ```
+

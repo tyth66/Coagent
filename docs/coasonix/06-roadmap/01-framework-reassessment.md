@@ -15,7 +15,7 @@ specification. The core conclusions remain valid:
 ```text
 1. Codex is the sole final authority.
 2. Codex and Reasonix do not communicate directly; all traffic passes through
-   the Coasonix wrapper.
+   the Coagent wrapper.
 3. MCP carries control information; Git/files/logs/artifacts carry factual material.
 4. Reasonix raw output must not enter Codex decision surface directly.
 5. Security boundaries (permission, patch checker, no sampling/elicitation/resources) are defined.
@@ -82,10 +82,11 @@ The original priority list. Items already completed are **[DONE]**; remaining ar
 
 ## Final Definition
 
-Coasonix is best described as:
+Coagent is best described as:
 
 ```text
 Codex-centered expert delegation runtime with strict tool contracts,
 explicit context projection, policy-bound execution, evidence-gated decisions,
 and append-only auditability.
 ```
+

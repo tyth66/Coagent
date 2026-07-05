@@ -1,4 +1,4 @@
-use coasonix_runtime_core::state::{TaskState, TaskStateError, TaskStateValue};
+use coagent_runtime_core::state::{TaskState, TaskStateError, TaskStateValue};
 
 #[test]
 fn illegal_state_transition_is_denied() {
@@ -56,4 +56,5 @@ fn agent_call_count_only_increments_through_runtime_decision() {
     state.note_runtime_owned_agent_call();
     assert_eq!(state.agent_calls(), 1);
 }
+
 

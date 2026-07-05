@@ -5,10 +5,10 @@ import { ERROR_CODES } from "./error-taxonomy";
 export type BackendProfile = "mock" | "conformance" | "reasonix-cli" | "mimocode-cli";
 
 export interface BackendProfileEnvironment {
-  COASONIX_AGENT_CLI_COMMAND_JSON?: string;
-  COASONIX_MIMOCODE_CLI_COMMAND_JSON?: string;
-  COASONIX_AGENT_TIMEOUT_MS?: string;
-  COASONIX_MIMOCODE_TIMEOUT_MS?: string;
+  COAGENT_AGENT_CLI_COMMAND_JSON?: string;
+  Coagent_MIMOCODE_CLI_COMMAND_JSON?: string;
+  COAGENT_AGENT_TIMEOUT_MS?: string;
+  COAGENT_MIMOCODE_TIMEOUT_MS?: string;
 }
 
 export interface ResolvedBackendProfile {
@@ -40,19 +40,19 @@ export function resolveBackendProfile(options: ResolveBackendProfileOptions): Re
       return {
         profile: options.profile,
         command: mockWorkerCommand(options.repoRoot),
-        timeoutMs: timeoutMs(env.COASONIX_AGENT_TIMEOUT_MS),
+        timeoutMs: timeoutMs(env.COAGENT_AGENT_TIMEOUT_MS),
       };
     case "reasonix-cli":
       return {
         profile: options.profile,
-        command: commandJson(env.COASONIX_AGENT_CLI_COMMAND_JSON, "COASONIX_AGENT_CLI_COMMAND_JSON"),
-        timeoutMs: timeoutMs(env.COASONIX_AGENT_TIMEOUT_MS),
+        command: commandJson(env.COAGENT_AGENT_CLI_COMMAND_JSON, "COAGENT_AGENT_CLI_COMMAND_JSON"),
+        timeoutMs: timeoutMs(env.COAGENT_AGENT_TIMEOUT_MS),
       };
     case "mimocode-cli":
       return {
         profile: options.profile,
-        command: commandJson(env.COASONIX_MIMOCODE_CLI_COMMAND_JSON, "COASONIX_MIMOCODE_CLI_COMMAND_JSON"),
-        timeoutMs: timeoutMs(env.COASONIX_MIMOCODE_TIMEOUT_MS ?? env.COASONIX_AGENT_TIMEOUT_MS),
+        command: commandJson(env.Coagent_MIMOCODE_CLI_COMMAND_JSON, "coagent_MIMOCODE_CLI_COMMAND_JSON"),
+        timeoutMs: timeoutMs(env.COAGENT_MIMOCODE_TIMEOUT_MS ?? env.COAGENT_AGENT_TIMEOUT_MS),
       };
   }
 }
@@ -61,7 +61,7 @@ function mockWorkerCommand(repoRoot: string): string[] {
   return [
     resolve(
       repoRoot,
-      process.platform === "win32" ? "bin/coasonix-mock-worker.cmd" : "bin/coasonix-mock-worker",
+      process.platform === "win32" ? "bin/Coagent-mock-worker.cmd" : "bin/Coagent-mock-worker",
     ),
     "review-diff",
   ];
@@ -93,8 +93,10 @@ function timeoutMs(value: string | undefined): number {
   }
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new BackendProfileError("COASONIX_AGENT_TIMEOUT_MS must be a positive integer");
+    throw new BackendProfileError("COAGENT_AGENT_TIMEOUT_MS must be a positive integer");
   }
   return parsed;
 }
+
+
 

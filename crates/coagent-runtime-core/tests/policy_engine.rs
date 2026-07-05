@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use coasonix_runtime_core::{
+use coagent_runtime_core::{
     artifact::ArtifactPolicy,
     policy::{
         CommandInvocation, PermissionLevel, PolicyEngine, PolicyEvaluationRequest, ResourceSet,
@@ -204,4 +204,5 @@ fn m2_minimum_owned_types_are_constructible() {
     assert_eq!(decision.decision, RuntimeDecisionValue::Deny);
     assert_eq!(routing.lane, "review");
 }
+
 

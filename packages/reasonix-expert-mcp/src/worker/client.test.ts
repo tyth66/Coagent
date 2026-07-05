@@ -114,7 +114,7 @@ describe("RuntimeWorkerClient", () => {
   test("missing worker executable maps to runtime_unavailable", async () => {
     const client = track(
       new RuntimeWorkerClient({
-        command: ["coasonix-worker-does-not-exist"],
+        command: ["coagent-worker-does-not-exist"],
         requestTimeoutMs: 100,
       }),
     );
@@ -188,8 +188,9 @@ function writeRuntimeUnavailableWorker(): string {
 }
 
 function writeWorkerScript(source: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "coasonix-worker-client-"));
+  const dir = mkdtempSync(join(tmpdir(), "coagent-worker-client-"));
   const path = join(dir, "worker.mjs");
   writeFileSync(path, source);
   return path;
 }
+

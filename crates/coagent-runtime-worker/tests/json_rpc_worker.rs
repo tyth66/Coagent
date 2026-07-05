@@ -16,7 +16,7 @@ struct WorkerProcess {
 
 impl WorkerProcess {
     fn spawn() -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_coasonix-runtime-worker"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_coagent-runtime-worker"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -78,7 +78,7 @@ fn temp_repo(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("coasonix-worker-{name}-{unique}"));
+    let root = std::env::temp_dir().join(format!("coagent-worker-{name}-{unique}"));
     fs::create_dir_all(root.join(".agent/diffs")).expect("create diffs");
     fs::create_dir_all(root.join(".agent/results")).expect("create results");
     root
@@ -106,7 +106,7 @@ fn valid_initialize_succeeds_after_migrations() {
     assert_eq!(response["jsonrpc"], "2.0");
     assert_eq!(response["id"], "REQ-init");
     assert_eq!(response["result"]["initialized"], true);
-    assert!(repo.join(".agent/coasonix.sqlite").exists());
+    assert!(repo.join(".agent/coagent.sqlite").exists());
 
     let (_shutdown, stderr) = worker.shutdown();
     assert!(
@@ -293,4 +293,6 @@ fn worker_shutdown_is_explicit() {
     assert_eq!(response["result"]["shutdown"], true);
     assert!(status.success(), "worker should exit successfully");
 }
+
+
 

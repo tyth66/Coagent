@@ -5,7 +5,7 @@ path. The schema file is retained as a test contract fixture for the active
 Reasonix review tool:
 
 ```text
-../../../schemas/coasonix-v1.schema.json
+../../../schemas/coagent-v1.schema.json
 ```
 
 Version evolution rules live in `../05-versioning/01-schema-contract-and-versioning.md`.
@@ -42,7 +42,7 @@ performs a narrow local `review_result_v1` contract check before returning
 1. Invalid tool input blocks tools/call.
 2. Invalid Reasonix output blocks Codex decision.
 3. Runtime startup must not require a schema path.
-4. Coasonix wrapper metadata must remain internally consistent when output_schema/schema_version metadata is used.
+4. Coagent wrapper metadata must remain internally consistent when output_schema/schema_version metadata is used.
 5. Unknown review payload shape fails unless an explicit compatibility path exists.
 6. Wrapper must not repair semantically invalid Reasonix output.
 ```
@@ -50,7 +50,7 @@ performs a narrow local `review_result_v1` contract check before returning
 ## 5. Fail-Closed Cases
 
 ```text
-missing Coasonix internal request identity
+missing Coagent internal request identity
 confidence outside 0..1
 unknown review payload shape
 unexpected top-level field
@@ -73,3 +73,5 @@ Architecture impact:
 The architecture path intentionally stays schema-free at Runtime startup; the
 fixture is for regression tests and contract documentation.
 ```
+
+

@@ -15,7 +15,7 @@ Same role lane -> cache-stable Reasonix Session
 Same tool call -> explicit snapshot input and schema-gated output
 ```
 
-Coasonix 不应把每次 `reasonix.*` 调用都变成全新的 Reasonix 项目，也不应把所有专家任务塞进一个共享巨型会话。推荐模型是：同一个 Reasonix Project Controller 下挂多个 task namespace 和 cache-stable session lanes。
+Coagent 不应把每次 `reasonix.*` 调用都变成全新的 Reasonix 项目，也不应把所有专家任务塞进一个共享巨型会话。推荐模型是：同一个 Reasonix Project Controller 下挂多个 task namespace 和 cache-stable session lanes。
 
 Final shape:
 
@@ -66,14 +66,14 @@ Different project boundary:
 
 ## 1. External Basis
 
-Reasonix 的公开文档显示两个工程事实会影响 Coasonix 映射：
+Reasonix 的公开文档显示两个工程事实会影响 Coagent 映射：
 
 ```text
 1. Reasonix is optimized around DeepSeek prefix-cache and long append-only sessions.
 2. Reasonix separates some collaboration roles into separate sessions to preserve cache-stable prefixes.
 ```
 
-因此 Coasonix 的 Wrapper 必须同时满足：
+因此 Coagent 的 Wrapper 必须同时满足：
 
 ```text
 1. preserve project-level continuity
@@ -168,7 +168,7 @@ lock_manager
 Rule:
 
 ```text
-Same tenant/user boundary + repo_root_realpath + worktree_id + base_branch + reasonix_config_hash + coasonix_policy_hash + schema_family + reasonix_runtime_version MUST route to the same Reasonix Project Controller, even when calls originate from different Codex sessions.
+Same tenant/user boundary + repo_root_realpath + worktree_id + base_branch + reasonix_config_hash + Coagent_policy_hash + schema_family + reasonix_runtime_version MUST route to the same Reasonix Project Controller, even when calls originate from different Codex sessions.
 ```
 
 Different repo_root, worktree_id, Reasonix config, schema family, runtime version, or policy boundary must route to a different Project Controller or fail closed during compatibility negotiation.
@@ -189,7 +189,7 @@ class ReasonixProjectController {
   repoRoot: string
   worktreeId: string
   reasonixConfigHash: string
-  coasonixPolicyHash: string
+  CoagentPolicyHash: string
   reasonixRuntimeVersion: string
 
   sessions: SessionPool
@@ -215,8 +215,8 @@ task_namespace =
 Rules:
 
 ```text
-1. Different Coasonix tasks under the same project MUST use separate task namespaces.
-2. Every Coasonix result artifact and audit record MUST be bound to task_id, request_id, snapshot_id, lane, and base_revision. The Reasonix review payload itself should contain review information only.
+1. Different Coagent tasks under the same project MUST use separate task namespaces.
+2. Every Coagent result artifact and audit record MUST be bound to task_id, request_id, snapshot_id, lane, and base_revision. The Reasonix review payload itself should contain review information only.
 3. No result from one task namespace may be consumed by another task unless Codex explicitly projects it as an artifact.
 4. Result artifacts MUST be written under task_id/request_id scoped paths.
 ```
@@ -318,7 +318,7 @@ reasonix.test_plan
 reasonix.propose_patch
 ```
 
-These tools are Wrapper-owned contracts. They do not need to correspond one-to-one with Reasonix internal tools. The Wrapper may map one MCP tool call to one or more Reasonix turns inside the selected lane, but the result must still validate against the declared Coasonix schema.
+These tools are Wrapper-owned contracts. They do not need to correspond one-to-one with Reasonix internal tools. The Wrapper may map one MCP tool call to one or more Reasonix turns inside the selected lane, but the result must still validate against the declared Coagent schema.
 
 ## 3. Recommended Lane Layout
 
@@ -366,7 +366,7 @@ project_key =
   + worktree_id
   + base_branch
   + reasonix_config_hash
-  + coasonix_policy_hash
+  + Coagent_policy_hash
   + schema_family
   + reasonix_runtime_version
 ```
@@ -374,13 +374,13 @@ project_key =
 ```text
 session_key =
   project_key
-  + coasonix_task_id
+  + Coagent_task_id
   + lane
   + model
   + permission_level
   + static_prefix_hash
   + schema_family
-  + coasonix_policy_hash
+  + Coagent_policy_hash
   + reasonix_runtime_version
 ```
 
@@ -404,7 +404,7 @@ Minimum project key components:
 repo_root_realpath
 worktree_id
 reasonix_config_hash
-coasonix_policy_hash
+Coagent_policy_hash
 schema_family
 reasonix_runtime_version
 ```
@@ -414,7 +414,7 @@ Project boundary rules:
 ```text
 different repo_root_realpath -> different Project Controller
 different worktree_id -> different Project Runtime
-different coasonix_policy_hash -> different Project Controller or hard invalidation
+different Coagent_policy_hash -> different Project Controller or hard invalidation
 different reasonix_config_hash -> different Project Controller
 different schema_family -> different Project Controller or explicit compatibility lane
 different reasonix_runtime_version -> different Project Controller or hard invalidation
@@ -428,7 +428,7 @@ type SessionRouteKey = {
   task_id: string
   lane: "review" | "security" | "debug" | "performance" | "architecture" | "patch"
   permission_level: "L0_READONLY" | "L1_DIFF_REVIEW" | "L2_PATCH_ONLY" | "L3_ISOLATED_WORKTREE"
-  schema_family: "coasonix.v1"
+  schema_family: "Coagent.v1"
   static_prefix_hash: string
   policy_hash: string
   reasonix_runtime_version: string
@@ -452,10 +452,10 @@ Any change opens a new compatible lane session or invalidates the old one. Permi
 
 ## 5. MVP Engineering Defaults
 
-Coasonix MVP defaults are conservative. Safety and auditability take precedence over maximum cache reuse.
+Coagent MVP defaults are conservative. Safety and auditability take precedence over maximum cache reuse.
 
 ```text
-1. Each Coasonix task SHOULD use an isolated git worktree by default.
+1. Each Coagent task SHOULD use an isolated git worktree by default.
 2. Multiple Codex sessions MAY run read-only analysis against the same project/worktree.
 3. Writes to the same worktree MUST be serialized by Runtime locks.
 4. Session lanes are task-scoped by default: session_key includes task_id.
@@ -471,7 +471,7 @@ Coasonix MVP defaults are conservative. Safety and auditability take precedence 
 Default:
 
 ```text
-one Coasonix task -> one isolated git worktree
+one Coagent task -> one isolated git worktree
 ```
 
 If multiple tasks share one worktree, Runtime must treat writes as a serialized critical section and must rely on task namespace, immutable snapshots, and worktree write lock to prevent state mixing.
@@ -495,7 +495,7 @@ session_key =
   + permission_level
   + schema_family
   + static_prefix_hash
-  + coasonix_policy_hash
+  + Coagent_policy_hash
   + reasonix_runtime_version
 ```
 
@@ -533,7 +533,7 @@ Reasonix owns: planner/reviewer/security/memory/tool subagent orchestration
 Wrapper validates: final schema result only
 ```
 
-Codex must not select or control Reasonix internal subagents. This preserves the boundary between Coasonix tool contracts and Reasonix internal orchestration.
+Codex must not select or control Reasonix internal subagents. This preserves the boundary between Coagent tool contracts and Reasonix internal orchestration.
 
 ### 5.5 Patch Permission Boundary
 
@@ -556,7 +556,7 @@ MVP deployment:
 ```text
 Codex -> TypeScript reasonix-expert MCP Adapter -> Rust Runtime Worker -> local Reasonix
 transport: STDIO
-database: .agent/coasonix.sqlite
+database: .agent/Coagent.sqlite
 process boundary: Codex startup launches one configured MCP server instance
 protocol boundary: initialize creates one MCP protocol session
 tool-call boundary: tools/call allocates/routes task namespace and session lane
@@ -572,11 +572,11 @@ requires: auth, tenant isolation, rate limits, request queue, central audit stor
 ```
 
 The shared-service deployment is not a planned v1 phase. It should be revisited
-only if Coasonix needs shared team infrastructure or remote workers.
+only if Coagent needs shared team infrastructure or remote workers.
 
 ## 6. Continuity Rules
 
-Cross-tool continuity MUST use explicit Coasonix state and artifacts.
+Cross-tool continuity MUST use explicit Coagent state and artifacts.
 
 Allowed:
 
@@ -600,7 +600,7 @@ Rules:
 ```text
 1. Reasonix session memory is never an authoritative source of task state.
 2. Every cross-tool dependency must appear in task_state or artifact paths.
-3. Every Coasonix result artifact must include request_id and map to the expected internal output contract; the Reasonix review payload remains review-only.
+3. Every Coagent result artifact must include request_id and map to the expected internal output contract; the Reasonix review payload remains review-only.
 4. Codex performs merge, conflict handling, and final decision.
 5. Hidden session continuity may improve cache locality but must not change correctness semantics.
 ```
@@ -746,7 +746,7 @@ base_revision
 lane
 tool_name
 permission_level
-coasonix_policy_hash
+Coagent_policy_hash
 static_prefix_hash
 schema_family
 context_projection_hash
@@ -804,14 +804,16 @@ cross-project result cache hit -> deny
 ## 12. Final Rule
 
 ```text
-Coasonix should call multiple Reasonix tools through one project-level persistent Reasonix Project Controller, multiple task namespaces, and multiple cache-stable session lanes.
+Coagent should call multiple Reasonix tools through one project-level persistent Reasonix Project Controller, multiple task namespaces, and multiple cache-stable session lanes.
 
 Global Runtime owns shared binary/provider/tool-schema surfaces.
 Project owns shared repo/config/plugin/sandbox context.
 Task namespace owns task-local isolation.
 Session lane owns cache-stable inference prefix.
-Coasonix task_state and artifacts own cross-tool continuity.
+Coagent task_state and artifacts own cross-tool continuity.
 Codex owns final decisions and execution.
 
 Different projects never share Reasonix sessions, task state, artifacts, result cache, patch proposals, context projections, audit namespace, or permission profile.
 ```
+
+

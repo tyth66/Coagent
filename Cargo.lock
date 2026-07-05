@@ -102,7 +102,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
-name = "coasonix-runtime-core"
+name = "coagent-runtime-core"
 version = "0.1.0"
 dependencies = [
  "jsonschema",
@@ -114,10 +114,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "coasonix-runtime-worker"
+name = "coagent-runtime-worker"
 version = "0.1.0"
 dependencies = [
- "coasonix-runtime-core",
+ "coagent-runtime-core",
  "serde",
  "serde_json",
 ]

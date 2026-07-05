@@ -148,7 +148,7 @@ v1 uses a repo-local SQLite database plus file-backed artifacts.
 
 ```text
 RuntimeDatabase:
-  opens .agent/coasonix.sqlite
+  opens .agent/Coagent.sqlite
 
 StateStore:
   reads/writes task_state rows
@@ -166,7 +166,7 @@ Rules:
 3. ArtifactGate is not a general filesystem abstraction.
 4. RuntimeKernel coordinates store writes so state and audit behavior remain
    auditable from one call path.
-5. Worker memory is an acceleration layer; .agent/coasonix.sqlite and artifact
+5. Worker memory is an acceleration layer; .agent/Coagent.sqlite and artifact
    files remain the recovery source.
 6. Audit, state, locks, and cache metadata use SQLite transactions.
 ```
@@ -232,7 +232,7 @@ Rules:
 1. Internal errors must not leak secrets or raw environment values.
 2. Policy/state denials are expected runtime results, not panics.
 3. Parse errors and invalid JSON-RPC frames use JSON-RPC standard errors.
-4. Runtime denials use Coasonix -320xx error codes.
+4. Runtime denials use Coagent -320xx error codes.
 5. Worker crash or unavailable worker maps to runtime_unavailable in the adapter
    and side_effect_not_executed.
 ```
@@ -260,7 +260,7 @@ Architecture impact:
 
 ```text
 No architecture change. This fixes adapter/worker interoperability by making
-the existing Coasonix -320xx range executable and testable.
+the existing Coagent -320xx range executable and testable.
 ```
 
 ## 8. Mutability Rules
@@ -312,3 +312,5 @@ runtime.write_audit
 ```
 
 through JSON-RPC 2.0 over stdio.
+
+

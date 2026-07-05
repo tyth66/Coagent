@@ -23,13 +23,13 @@ export class ConfigError extends Error {
 }
 
 export function loadServerConfig(env: Environment = process.env): ServerConfig {
-  const missing = ["COASONIX_REPO_ROOT", "COASONIX_RUNTIME_WORKER"].filter((key) => !env[key]);
+  const missing = ["COAGENT_REPO_ROOT", "COAGENT_RUNTIME_WORKER"].filter((key) => !env[key]);
 
-  // COASONIX_AGENT_COMMAND_JSON first, fall back to legacy COASONIX_REASONIX_COMMAND_JSON
-  const agentCmdJson = env.COASONIX_AGENT_COMMAND_JSON ?? env.COASONIX_REASONIX_COMMAND_JSON;
-  const agentCmd = env.COASONIX_AGENT_COMMAND ?? env.COASONIX_REASONIX_COMMAND;
+  // COAGENT_AGENT_COMMAND_JSON first, fall back to legacy COAGENT_AGENT_COMMAND_JSON
+  const agentCmdJson = env.COAGENT_AGENT_COMMAND_JSON ?? env.COAGENT_AGENT_COMMAND_JSON;
+  const agentCmd = env.COAGENT_AGENT_COMMAND ?? env.COAGENT_AGENT_COMMAND;
   if (!agentCmdJson && !agentCmd) {
-    missing.push("COASONIX_AGENT_COMMAND_JSON or COASONIX_AGENT_COMMAND");
+    missing.push("COAGENT_AGENT_COMMAND_JSON or COAGENT_AGENT_COMMAND");
   }
 
   if (missing.length > 0) {
@@ -37,18 +37,18 @@ export function loadServerConfig(env: Environment = process.env): ServerConfig {
   }
 
   return {
-    repoRoot: resolve(required(env.COASONIX_REPO_ROOT, "COASONIX_REPO_ROOT")),
-    runtimeWorker: resolve(required(env.COASONIX_RUNTIME_WORKER, "COASONIX_RUNTIME_WORKER")),
+    repoRoot: resolve(required(env.COAGENT_REPO_ROOT, "COAGENT_REPO_ROOT")),
+    runtimeWorker: resolve(required(env.COAGENT_RUNTIME_WORKER, "COAGENT_RUNTIME_WORKER")),
     agentCommand: parseAgentCommand(agentCmdJson, agentCmd),
     runtimeRequestTimeoutMs: parsePositiveInteger(
-      env.COASONIX_RUNTIME_REQUEST_TIMEOUT_MS,
+      env.COAGENT_RUNTIME_REQUEST_TIMEOUT_MS,
       2_000,
-      "COASONIX_RUNTIME_REQUEST_TIMEOUT_MS",
+      "COAGENT_RUNTIME_REQUEST_TIMEOUT_MS",
     ),
     agentTimeoutMs: parsePositiveInteger(
-      env.COASONIX_AGENT_TIMEOUT_MS ?? env.COASONIX_REASONIX_TIMEOUT_MS,
+      env.COAGENT_AGENT_TIMEOUT_MS ?? env.COAGENT_AGENT_TIMEOUT_MS,
       10_000,
-      "COASONIX_AGENT_TIMEOUT_MS",
+      "COAGENT_AGENT_TIMEOUT_MS",
     ),
   };
 }
@@ -66,25 +66,25 @@ function parseAgentCommand(jsonCmd: string | undefined, plainCmd: string | undef
     try {
       parsed = JSON.parse(jsonCmd);
     } catch (error) {
-      throw new ConfigError(`Invalid COASONIX_AGENT_COMMAND_JSON: ${String(error)}`);
+      throw new ConfigError(`Invalid COAGENT_AGENT_COMMAND_JSON: ${String(error)}`);
     }
     if (
       !Array.isArray(parsed) ||
       parsed.length === 0 ||
       parsed.some((item) => typeof item !== "string" || item.length === 0)
     ) {
-      throw new ConfigError("COASONIX_AGENT_COMMAND_JSON must be a non-empty string array");
+      throw new ConfigError("COAGENT_AGENT_COMMAND_JSON must be a non-empty string array");
     }
     return parsed;
   }
 
   const raw = (plainCmd ?? "").trim();
   if (!raw) {
-    throw new ConfigError("COASONIX_AGENT_COMMAND cannot be empty");
+    throw new ConfigError("COAGENT_AGENT_COMMAND cannot be empty");
   }
   if (/["']/.test(raw)) {
     throw new ConfigError(
-      "COASONIX_AGENT_COMMAND contains ambiguous quoting; use COASONIX_AGENT_COMMAND_JSON",
+      "COAGENT_AGENT_COMMAND contains ambiguous quoting; use COAGENT_AGENT_COMMAND_JSON",
     );
   }
   return raw.split(/\s+/);
@@ -100,3 +100,5 @@ function parsePositiveInteger(value: string | undefined, fallback: number, name:
   }
   return parsed;
 }
+
+

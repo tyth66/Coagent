@@ -53,15 +53,15 @@ describe("reasonix-expert MCP stdio server", () => {
     const workerPath = await runtimeWorkerPath();
     const reasonix = writeMockReasonix("success");
     const server = startServer({
-      COASONIX_REPO_ROOT: fixture.repo,
-      COASONIX_RUNTIME_WORKER: workerPath,
-      COASONIX_AGENT_COMMAND_JSON: JSON.stringify([reasonix, "review-diff"]),
+      COAGENT_REPO_ROOT: fixture.repo,
+      COAGENT_RUNTIME_WORKER: workerPath,
+      COAGENT_AGENT_COMMAND_JSON: JSON.stringify([reasonix, "review-diff"]),
     });
 
     const initialize = await server.request("initialize", {
       protocolVersion: "2025-06-18",
       capabilities: {},
-      clientInfo: { name: "coasonix-test", version: "0.0.0" },
+      clientInfo: { name: "coagent-test", version: "0.0.0" },
     });
     expect(initialize.result).toMatchObject({
       capabilities: { tools: {} },
@@ -98,12 +98,12 @@ describe("reasonix-expert MCP stdio server", () => {
       stderr: "pipe",
       env: {
         ...process.env,
-        COASONIX_REPO_ROOT: fixture.repo,
-        COASONIX_RUNTIME_WORKER: workerPath,
-        COASONIX_AGENT_COMMAND_JSON: JSON.stringify([reasonix, "review-diff"]),
+        COAGENT_REPO_ROOT: fixture.repo,
+        COAGENT_RUNTIME_WORKER: workerPath,
+        COAGENT_AGENT_COMMAND_JSON: JSON.stringify([reasonix, "review-diff"]),
       },
     });
-    const client = new Client({ name: "coasonix-sdk-test", version: "0.0.0" });
+    const client = new Client({ name: "coagent-sdk-test", version: "0.0.0" });
 
     await client.connect(transport);
     try {
@@ -133,15 +133,15 @@ describe("reasonix-expert MCP stdio server", () => {
     const workerPath = await runtimeWorkerPath();
     const reasonix = writeMockReasonix("success", marker);
     const server = startServer({
-      COASONIX_REPO_ROOT: fixture.repo,
-      COASONIX_RUNTIME_WORKER: workerPath,
-      COASONIX_AGENT_COMMAND_JSON: JSON.stringify([reasonix, "review-diff"]),
+      COAGENT_REPO_ROOT: fixture.repo,
+      COAGENT_RUNTIME_WORKER: workerPath,
+      COAGENT_AGENT_COMMAND_JSON: JSON.stringify([reasonix, "review-diff"]),
     });
 
     await server.request("initialize", {
       protocolVersion: "2025-06-18",
       capabilities: {},
-      clientInfo: { name: "coasonix-test", version: "0.0.0" },
+      clientInfo: { name: "coagent-test", version: "0.0.0" },
     });
 
     const result = await server.request("tools/call", {
@@ -165,9 +165,9 @@ describe("reasonix-expert MCP stdio server", () => {
       cwd: repoRoot,
       env: {
         ...process.env,
-        COASONIX_REPO_ROOT: fixture.repo,
-        COASONIX_RUNTIME_WORKER: workerPath,
-        COASONIX_AGENT_COMMAND_JSON: JSON.stringify([reasonix, "review-diff"]),
+        COAGENT_REPO_ROOT: fixture.repo,
+        COAGENT_RUNTIME_WORKER: workerPath,
+        COAGENT_AGENT_COMMAND_JSON: JSON.stringify([reasonix, "review-diff"]),
       },
       stdin: "pipe",
       stdout: "pipe",
@@ -192,9 +192,9 @@ describe("reasonix-expert MCP stdio server", () => {
       cwd: repoRoot,
       env: {
         ...process.env,
-        COASONIX_REPO_ROOT: fixture.repo,
-        COASONIX_RUNTIME_WORKER: workerPath,
-        COASONIX_AGENT_COMMAND_JSON: JSON.stringify([processExec()]),
+        COAGENT_REPO_ROOT: fixture.repo,
+        COAGENT_RUNTIME_WORKER: workerPath,
+        COAGENT_AGENT_COMMAND_JSON: JSON.stringify([processExec()]),
       },
       stdin: "pipe",
       stdout: "pipe",
@@ -210,7 +210,7 @@ describe("reasonix-expert MCP stdio server", () => {
         params: {
           protocolVersion: "2025-06-18",
           capabilities: {},
-          clientInfo: { name: "coasonix-start-script-test", version: "0.0.0" },
+          clientInfo: { name: "coagent-start-script-test", version: "0.0.0" },
         },
       })}\n`,
     );
@@ -284,10 +284,10 @@ function startServer(env: Record<string, string>) {
 
 async function runtimeWorkerPath(): Promise<string> {
   const exe =
-    process.platform === "win32" ? "coasonix-runtime-worker.exe" : "coasonix-runtime-worker";
+    process.platform === "win32" ? "coagent-runtime-worker.exe" : "coagent-runtime-worker";
   const path = join(repoRoot, "target", "debug", exe);
   if (!existsSync(path)) {
-    const build = Bun.spawnSync(["cargo", "build", "-p", "coasonix-runtime-worker"], {
+    const build = Bun.spawnSync(["cargo", "build", "-p", "coagent-runtime-worker"], {
       cwd: repoRoot,
       stdout: "pipe",
       stderr: "pipe",
@@ -300,7 +300,7 @@ async function runtimeWorkerPath(): Promise<string> {
 }
 
 function createFixture(name: string) {
-  const repo = mkdtempSync(join(tmpdir(), `coasonix-server-${name}-`));
+  const repo = mkdtempSync(join(tmpdir(), `coagent-server-${name}-`));
   mkdirSync(join(repo, ".agent", "diffs"), { recursive: true });
   mkdirSync(join(repo, ".agent", "results"), { recursive: true });
   writeFileSync(join(repo, ".agent", "diffs", "current.diff"), "diff --git a/a.txt b/a.txt\n");
@@ -322,7 +322,7 @@ function reviewDiffInput(taskId: string, requestId: string, repo: string) {
 }
 
 function writeMockReasonix(mode: string, markerPath?: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "coasonix-server-mock-reasonix-"));
+  const dir = mkdtempSync(join(tmpdir(), "coagent-server-mock-reasonix-"));
   const script = join(dir, "mock-reasonix.mjs");
   writeFileSync(
     script,
@@ -367,5 +367,7 @@ function writeMockReasonix(mode: string, markerPath?: string): string {
   writeFileSync(command, `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`);
   return command;
 }
+
+
 
 

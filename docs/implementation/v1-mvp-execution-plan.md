@@ -10,7 +10,7 @@ review-diff-agent-collaboration-plan.md
 
 ```text
 Codex   = assigns the task and makes the final decision
-Coasonix = safely gates and translates the call
+Coagent = safely gates and translates the call
 Reasonix = performs the delegated expert review task
 Codex   = evaluates the returned review
 ```
@@ -36,7 +36,9 @@ result should contain.
 ```powershell
 cargo test --workspace
 bun test
-python -m json.tool schemas/coasonix-v1.schema.json > $null
+python -m json.tool schemas/coagent-v1.schema.json > $null
 cargo fmt --all -- --check
 git diff --check
 ```
+
+

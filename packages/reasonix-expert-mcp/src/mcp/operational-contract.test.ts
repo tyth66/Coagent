@@ -17,10 +17,12 @@ describe("MCP server operational contract", () => {
     const readme = readFileSync(resolve(repoRoot, "README.md"), "utf8");
 
     expect(readme).toContain("bun run --silent --cwd=packages/reasonix-expert-mcp start:mcp");
-    expect(readme).toContain("COASONIX_REPO_ROOT");
-    expect(readme).toContain("COASONIX_RUNTIME_WORKER");
-    expect(readme).toContain("COASONIX_AGENT_COMMAND_JSON");
+    expect(readme).toContain("COAGENT_REPO_ROOT");
+    expect(readme).toContain("COAGENT_RUNTIME_WORKER");
+    expect(readme).toContain("COAGENT_AGENT_COMMAND_JSON");
   });
 });
+
+
 
 

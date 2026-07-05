@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use coasonix_runtime_core::{
+use coagent_runtime_core::{
     policy::RuntimeDecisionValue,
     state::{TaskState, TaskStateValue},
     storage::{AuditEventInput, CacheMetadata, RuntimeDecisionRecord, RuntimeStore, StoreError},
@@ -15,7 +15,7 @@ fn temp_repo(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("coasonix-store-{name}-{unique}"));
+    let root = std::env::temp_dir().join(format!("coagent-store-{name}-{unique}"));
     fs::create_dir_all(&root).expect("create temp repo");
     root
 }
@@ -47,7 +47,7 @@ fn database_created_under_agent_directory_with_required_pragmas() {
     let repo = temp_repo("created");
     let store = RuntimeStore::initialize(&repo).expect("initialize store");
 
-    assert_eq!(store.database_path(), repo.join(".agent/coasonix.sqlite"));
+    assert_eq!(store.database_path(), repo.join(".agent/coagent.sqlite"));
     assert!(store.database_path().exists());
     assert!(store.foreign_keys_enabled().expect("foreign keys pragma"));
     assert_eq!(store.journal_mode().expect("journal mode"), "wal");
@@ -85,7 +85,7 @@ fn failed_migration_blocks_store_initialization_and_side_effects() {
         .expect_err("invalid migration should fail");
 
     assert!(matches!(error, StoreError::MigrationFailed(_)));
-    assert!(!repo.join(".agent/coasonix.sqlite").exists());
+    assert!(!repo.join(".agent/coagent.sqlite").exists());
 }
 
 #[test]
@@ -316,5 +316,7 @@ fn cache_corruption_denies_reuse_only() {
         .write_audit_event(&audit("TASK-cache", "cache_corruption_detected"))
         .expect("store remains usable after corrupt cache metadata");
 }
+
+
 
 

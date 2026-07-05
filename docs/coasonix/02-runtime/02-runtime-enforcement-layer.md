@@ -1,8 +1,8 @@
 # Runtime Enforcement Layer
 
-当前 Coasonix 文档已经定义了规则、schema、状态机、policy、事务、缓存和可观测性。系统真正能否安全运行，取决于 Runtime Enforcement Layer 是否把这些规则变成不可绕过的运行时门禁。
+当前 Coagent 文档已经定义了规则、schema、状态机、policy、事务、缓存和可观测性。系统真正能否安全运行，取决于 Runtime Enforcement Layer 是否把这些规则变成不可绕过的运行时门禁。
 
-本文件定义 Coasonix 的执行内核。
+本文件定义 Coagent 的执行内核。
 
 将本文件中的门禁规则转成可执行实现时，必须同时遵守
 [06-executable-runtime-details.md](06-executable-runtime-details.md)。该文件定义
@@ -12,7 +12,7 @@ audit storage、verification runner、human approval lifecycle 和 patch dry-run
 
 ## 1. Runtime Positioning
 
-Coasonix 当前阶段：
+Coagent 当前阶段：
 
 ```text
 Deterministic Multi-Agent Runtime Spec: complete
@@ -221,7 +221,7 @@ stopped_by_limit -> delegating_to_reasonix: deny
 
 ### 9.1 Responsibility
 
-Schema Enforcement Layer enforces [../../../schemas/coasonix-v1.schema.json](../../../schemas/coasonix-v1.schema.json) using JSON Schema Draft 2020-12.
+Schema Enforcement Layer enforces [../../../schemas/coagent-v1.schema.json](../../../schemas/coagent-v1.schema.json) using JSON Schema Draft 2020-12.
 
 It owns:
 
@@ -541,3 +541,5 @@ Autonomous patch operation: blocked until patch safety, approval, transaction, a
 ```
 
 The v1 implementation now exercises this runtime contract through the Rust RuntimeKernel, JSON-RPC stdio worker, TypeScript worker client, and mock `reasonix.review_diff` vertical slice. It should not be operated in autonomous patch-generating mode until the post-v1 patch gates and conformance tests pass.
+
+

@@ -1,16 +1,16 @@
-# Coasonix Collaboration Model
+# Coagent Collaboration Model
 
-This is the canonical product model for Coasonix.
+This is the canonical product model for Coagent.
 
 ```text
 Codex   = assigns work, owns execution context, and makes the final decision
-Coasonix = provides safe protocol translation, runtime gating, and audit
+Coagent = provides safe protocol translation, runtime gating, and audit
 Reasonix = performs the delegated expert task and returns only the task result
 Codex   = evaluates the result and decides what to do next
 ```
 
-Coasonix is not trying to turn Reasonix into a generic CLI utility. Codex and
-Reasonix are both agent systems. Coasonix exists so Codex can delegate a bounded
+Coagent is not trying to turn Reasonix into a generic CLI utility. Codex and
+Reasonix are both agent systems. Coagent exists so Codex can delegate a bounded
 expert task to Reasonix without giving Reasonix control of Codex's workspace,
 policy, terminal, or final decision.
 
@@ -33,9 +33,9 @@ Codex may call Reasonix when an expert review or reasoning task would improve
 quality, but Codex must not treat Reasonix output as an instruction stream.
 Reasonix output is advice/evidence for Codex to evaluate.
 
-### Coasonix
+### Coagent
 
-Coasonix owns:
+Coagent owns:
 
 ```text
 MCP tool surface
@@ -47,7 +47,7 @@ protocol conversion between Codex and Reasonix
 error classification
 ```
 
-Coasonix must keep internal protocol, runtime, audit, and backend diagnostics out
+Coagent must keep internal protocol, runtime, audit, and backend diagnostics out
 of Reasonix's task result. Those details may appear in logs or MCP error metadata,
 but they are not Reasonix's answer to Codex.
 
@@ -73,12 +73,12 @@ transport details.
 
 ```text
 Codex calls reasonix.review_diff
--> Coasonix validates MCP arguments and prepares the Reasonix task
--> Coasonix asks Rust Runtime whether the call is allowed
+-> Coagent validates MCP arguments and prepares the Reasonix task
+-> Coagent asks Rust Runtime whether the call is allowed
 -> Rust Runtime checks task state, paths, argv, network policy, and auditability
--> Coasonix delegates the review task to Reasonix only when Rust returns allow
+-> Coagent delegates the review task to Reasonix only when Rust returns allow
 -> Reasonix returns review information only
--> Coasonix wraps that review into an MCP tool result
+-> Coagent wraps that review into an MCP tool result
 -> Codex decides whether and how to use the review
 ```
 
@@ -109,7 +109,7 @@ Reasonix target result:
 }
 ```
 
-Coasonix may internally attach `task_id`, `request_id`, backend exit status,
+Coagent may internally attach `task_id`, `request_id`, backend exit status,
 error codes, audit ids, and protocol metadata, but those are wrapper metadata,
 not Reasonix's review result.
 
@@ -118,3 +118,4 @@ not Reasonix's review result.
 Do not expand beyond `reasonix.review_diff` until this result boundary is clean.
 Post-v1 surfaces such as patch application, human approval, remote transports,
 network exceptions, and additional Reasonix tools remain out of scope.
+

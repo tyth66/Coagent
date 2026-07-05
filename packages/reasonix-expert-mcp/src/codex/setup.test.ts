@@ -6,9 +6,9 @@ import { buildCodexMcpAddCommand, setupCodexMcp } from "./setup";
 
 const repoRoot = resolve(import.meta.dir, "../../../..");
 const runtimeWorkerName =
-  process.platform === "win32" ? "coasonix-runtime-worker.exe" : "coasonix-runtime-worker";
+  process.platform === "win32" ? "coagent-runtime-worker.exe" : "coagent-runtime-worker";
 const mockWorkerName =
-  process.platform === "win32" ? "coasonix-mock-worker.cmd" : "coasonix-mock-worker";
+  process.platform === "win32" ? "coagent-mock-worker.cmd" : "coagent-mock-worker";
 
 describe("Codex MCP setup", () => {
   test("builds a protocol-clean codex mcp add command with stable paths", () => {
@@ -23,20 +23,20 @@ describe("Codex MCP setup", () => {
     expect(command.command).toBe("codex");
     expect(command.args).toContain("mcp");
     expect(command.args).toContain("add");
-    expect(command.args).toContain("coasonix");
+    expect(command.args).toContain("coagent");
     expect(command.args).toContain("--");
     expect(command.args).toContain("run");
     expect(command.args).toContain("--silent");
     expect(command.args).toContain("start:mcp");
     expect(command.args).toContain(`--cwd=${resolve(repoRoot, "packages/reasonix-expert-mcp")}`);
-    expect(command.args).toContain("COASONIX_REPO_ROOT=D:\\work\\target-repo");
-    expect(command.args.join("\n")).not.toContain("COASONIX_SCHEMA_PATH");
+    expect(command.args).toContain("COAGENT_REPO_ROOT=D:\\work\\target-repo");
+    expect(command.args.join("\n")).not.toContain("COAGENT_SCHEMA_PATH");
     expect(command.args).toContain(
-      `COASONIX_RUNTIME_WORKER=${resolve(repoRoot, "target/debug", runtimeWorkerName)}`,
+      `COAGENT_RUNTIME_WORKER=${resolve(repoRoot, "target/debug", runtimeWorkerName)}`,
     );
-    const workerEnv = command.args.find((arg) => arg.startsWith("COASONIX_AGENT_COMMAND_JSON="));
+    const workerEnv = command.args.find((arg) => arg.startsWith("COAGENT_AGENT_COMMAND_JSON="));
     expect(workerEnv).toContain(mockWorkerName);
-    const workerArgv = JSON.parse(workerEnv!.replace("COASONIX_AGENT_COMMAND_JSON=", ""));
+    const workerArgv = JSON.parse(workerEnv!.replace("COAGENT_AGENT_COMMAND_JSON=", ""));
     expect(workerArgv[1]).toBe("review-diff");
     expect(existsSync(workerArgv[0])).toBe(true);
     expect(command.args.join(" ")).not.toContain("Temp");
@@ -51,11 +51,11 @@ describe("Codex MCP setup", () => {
       profile: "conformance",
     });
 
-    const workerEnv = command.args.find((arg) => arg.startsWith("COASONIX_AGENT_COMMAND_JSON="));
-    const workerArgv = JSON.parse(workerEnv!.replace("COASONIX_AGENT_COMMAND_JSON=", ""));
+    const workerEnv = command.args.find((arg) => arg.startsWith("COAGENT_AGENT_COMMAND_JSON="));
+    const workerArgv = JSON.parse(workerEnv!.replace("COAGENT_AGENT_COMMAND_JSON=", ""));
     expect(workerArgv[0]).toContain(mockWorkerName);
     expect(workerArgv[1]).toBe("review-diff");
-    expect(command.args).toContain("COASONIX_AGENT_TIMEOUT_MS=10000");
+    expect(command.args).toContain("COAGENT_AGENT_TIMEOUT_MS=10000");
   });
 
   test("reasonix-cli profile requires explicit backend command JSON", () => {
@@ -78,15 +78,15 @@ describe("Codex MCP setup", () => {
       codexCommand: "codex",
       bunCommand: "bun",
       profile: "reasonix-cli",
-      env: { COASONIX_AGENT_CLI_COMMAND_JSON: '["reasonix-cli","review-diff"]' },
+      env: { COAGENT_AGENT_CLI_COMMAND_JSON: '["reasonix-cli","review-diff"]' },
     });
 
-    const workerEnv = command.args.find((arg) => arg.startsWith("COASONIX_AGENT_COMMAND_JSON="));
-    expect(JSON.parse(workerEnv!.replace("COASONIX_AGENT_COMMAND_JSON=", ""))).toEqual([
+    const workerEnv = command.args.find((arg) => arg.startsWith("COAGENT_AGENT_COMMAND_JSON="));
+    expect(JSON.parse(workerEnv!.replace("COAGENT_AGENT_COMMAND_JSON=", ""))).toEqual([
       "reasonix-cli",
       "review-diff",
     ]);
-    expect(command.args).toContain("COASONIX_AGENT_TIMEOUT_MS=10000");
+    expect(command.args).toContain("COAGENT_AGENT_TIMEOUT_MS=10000");
     expect(command.args).toContain("start:mcp");
     expect(command.args).toContain("--silent");
   });
@@ -104,13 +104,13 @@ describe("Codex MCP setup", () => {
       verifyRegistration: false,
       run: async (command, args) => {
         calls.push({ command, args });
-        return { exitCode: 0, stdout: "Added global MCP server 'coasonix'.", stderr: "" };
+        return { exitCode: 0, stdout: "Added global MCP server 'coagent'.", stderr: "" };
       },
     });
 
     expect(calls).toHaveLength(1);
     expect(calls[0].command).toBe("codex");
-    expect(calls[0].args.slice(0, 4)).toEqual(["mcp", "add", "coasonix", "--env"]);
+    expect(calls[0].args.slice(0, 4)).toEqual(["mcp", "add", "coagent", "--env"]);
   });
 
   test("verifies the registered Codex MCP server after add", async () => {
@@ -125,27 +125,27 @@ describe("Codex MCP setup", () => {
       buildRuntimeWorker: false,
       run: async (command, args) => {
         calls.push({ command, args });
-        if (args[0] === "mcp" && args[1] === "add" && args[2] === "coasonix") {
-          return { exitCode: 0, stdout: "Added global MCP server 'coasonix'.", stderr: "" };
+        if (args[0] === "mcp" && args[1] === "add" && args[2] === "coagent") {
+          return { exitCode: 0, stdout: "Added global MCP server 'coagent'.", stderr: "" };
         }
-        if (args.join(" ") === "mcp get coasonix") {
-          return { exitCode: 0, stdout: "coasonix\n", stderr: "" };
+        if (args.join(" ") === "mcp get Coagent") {
+          return { exitCode: 0, stdout: "coagent\n", stderr: "" };
         }
         if (args.join(" ") === "mcp list") {
-          return { exitCode: 0, stdout: "coasonix enabled\n", stderr: "" };
+          return { exitCode: 0, stdout: "coagent enabled\n", stderr: "" };
         }
         return { exitCode: 1, stdout: "", stderr: `unexpected command: ${args.join(" ")}` };
       },
     });
 
     expect(calls.map((call) => call.args.slice(0, 3))).toEqual([
-      ["mcp", "add", "coasonix"],
-      ["mcp", "get", "coasonix"],
+      ["mcp", "add", "coagent"],
+      ["mcp", "get", "coagent"],
       ["mcp", "list"],
     ]);
   });
 
-  test("fails setup if codex mcp list does not include coasonix", async () => {
+  test("fails setup if codex mcp list does not include Coagent", async () => {
     await expect(
       setupCodexMcp({
         repoRoot,
@@ -156,10 +156,10 @@ describe("Codex MCP setup", () => {
         buildRuntimeWorker: false,
         run: async (_command, args) => {
           if (args[1] === "add") {
-            return { exitCode: 0, stdout: "Added global MCP server 'coasonix'.", stderr: "" };
+            return { exitCode: 0, stdout: "Added global MCP server 'coagent'.", stderr: "" };
           }
           if (args[1] === "get") {
-            return { exitCode: 0, stdout: "coasonix\n", stderr: "" };
+            return { exitCode: 0, stdout: "coagent\n", stderr: "" };
           }
           if (args[1] === "list") {
             return { exitCode: 0, stdout: "other-server enabled\n", stderr: "" };
@@ -167,7 +167,7 @@ describe("Codex MCP setup", () => {
           return { exitCode: 1, stdout: "", stderr: `unexpected command: ${args.join(" ")}` };
         },
       }),
-    ).rejects.toThrow("codex mcp list did not include coasonix");
+    ).rejects.toThrow("codex mcp list did not include Coagent");
   });
 
   test("root package exposes setup:codex-mcp", () => {
@@ -186,8 +186,8 @@ describe("Codex MCP setup", () => {
       bunCommand: "bun",
       profile: "mock",
     });
-    const workerEnv = command.args.find((arg) => arg.startsWith("COASONIX_AGENT_COMMAND_JSON="));
-    const workerArgv = JSON.parse(workerEnv!.replace("COASONIX_AGENT_COMMAND_JSON=", ""));
+    const workerEnv = command.args.find((arg) => arg.startsWith("COAGENT_AGENT_COMMAND_JSON="));
+    const workerArgv = JSON.parse(workerEnv!.replace("COAGENT_AGENT_COMMAND_JSON=", ""));
     const worker = Bun.spawn(workerArgv, {
       stdin: "pipe",
       stdout: "pipe",
@@ -239,5 +239,7 @@ describe("Codex MCP setup", () => {
     expect(stdout).toContain("--profile");
   });
 });
+
+
 
 

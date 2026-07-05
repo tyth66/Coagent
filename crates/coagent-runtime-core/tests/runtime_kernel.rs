@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use coasonix_runtime_core::{
+use coagent_runtime_core::{
     kernel::{AuditEvent, RuntimeConfig, RuntimeDecisionValue, RuntimeKernel, engine_results},
     policy::{CommandInvocation, PermissionLevel, ResourceSet, RuntimeOperationRequest},
     state::{TaskState, TaskStateValue},
@@ -16,7 +16,7 @@ fn temp_repo(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("coasonix-kernel-{name}-{unique}"));
+    let root = std::env::temp_dir().join(format!("coagent-kernel-{name}-{unique}"));
     fs::create_dir_all(root.join(".agent/diffs")).expect("create diffs");
     fs::create_dir_all(root.join(".agent/results")).expect("create results");
     root
@@ -204,5 +204,7 @@ fn decision_merge_precedence_matches_blueprint() {
         RuntimeDecisionValue::Deny
     );
 }
+
+
 
 

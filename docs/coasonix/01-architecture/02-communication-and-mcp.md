@@ -1,15 +1,15 @@
 # Communication and MCP Boundary
 
 MCP is the Codex-facing control protocol. Reasonix is not exposed directly to
-Codex. Coasonix owns the boundary.
+Codex. Coagent owns the boundary.
 
 ## Layers
 
 ```text
-MCP control plane:  Codex -> Coasonix tool call
-Runtime gate:       Coasonix -> Rust Runtime allow/deny
-Expert task plane:  Coasonix -> Reasonix delegated task
-MCP result plane:   Coasonix -> Codex structured result
+MCP control plane:  Codex -> Coagent tool call
+Runtime gate:       Coagent -> Rust Runtime allow/deny
+Expert task plane:  Coagent -> Reasonix delegated task
+MCP result plane:   Coagent -> Codex structured result
 ```
 
 ## MCP Tool
@@ -27,26 +27,26 @@ know how to call the tool. It is not a Reasonix result contract.
 
 ```text
 Codex tools/call reasonix.review_diff
--> Coasonix normalizes arguments
--> Coasonix allocates internal request identity as needed
--> Coasonix asks Rust Runtime to evaluate the operation
+-> Coagent normalizes arguments
+-> Coagent allocates internal request identity as needed
+-> Coagent asks Rust Runtime to evaluate the operation
 -> Rust Runtime returns allow/deny
--> Coasonix invokes Reasonix only on allow
+-> Coagent invokes Reasonix only on allow
 -> Reasonix returns review information only
--> Coasonix wraps review data into MCP tool result
+-> Coagent wraps review data into MCP tool result
 -> Codex decides whether to use the review
 ```
 
 ## What Codex Sees
 
-Codex should see the review result and, when something fails, a Coasonix error
+Codex should see the review result and, when something fails, a Coagent error
 with a clear layer/code. Codex should not need to interpret backend process logs
 or runtime audit internals as if they were Reasonix answer.
 
 The canonical review_diff result contract is defined in
 [../03-reasonix/01-tool-contracts-and-wrapper.md](../03-reasonix/01-tool-contracts-and-wrapper.md).
 
-Coasonix may include internal diagnostics in MCP `_meta` for failures, for example:
+Coagent may include internal diagnostics in MCP `_meta` for failures, for example:
 
 ```json
 {
@@ -55,7 +55,7 @@ Coasonix may include internal diagnostics in MCP `_meta` for failures, for examp
 }
 ```
 
-Those fields are Coasonix metadata, not Reasonix review content.
+Those fields are Coagent metadata, not Reasonix review content.
 
 ## What Reasonix Should Return
 
@@ -74,16 +74,16 @@ MCP protocol fields
 audit ids
 ```
 
-If Coasonix needs those fields for routing or verification, Coasonix owns them
+If Coagent needs those fields for routing or verification, Coagent owns them
 internally.
 
 ## Failure Flow
 
 ```text
-invalid MCP arguments   -> Coasonix rejects before Runtime or Reasonix
-runtime deny            -> Coasonix does not invoke Reasonix
-Reasonix timeout/nonzero/malformed output -> Coasonix returns an MCP error
-Reasonix review contract invalid          -> Coasonix returns an MCP error
+invalid MCP arguments   -> Coagent rejects before Runtime or Reasonix
+runtime deny            -> Coagent does not invoke Reasonix
+Reasonix timeout/nonzero/malformed output -> Coagent returns an MCP error
+Reasonix review contract invalid          -> Coagent returns an MCP error
 ```
 
 In all failure cases, Codex receives an error classification. It does not receive
@@ -93,5 +93,6 @@ worker stdout/stderr as trusted review content.
 
 The live implementation still uses a transitional backend payload that includes
 system-envelope fields in the review result. The active plan to move these to
-Coasonix wrapper metadata is in
+Coagent wrapper metadata is in
 [../../implementation/review-diff-agent-collaboration-plan.md](../../implementation/review-diff-agent-collaboration-plan.md).
+

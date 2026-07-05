@@ -1,11 +1,11 @@
 # Technology Selection
 
-This document records the implementation technology decisions for Coasonix v1.
+This document records the implementation technology decisions for Coagent v1.
 It complements the node-level design in `03-implementation-plan.md`.
 
 ## 1. Decision
 
-Coasonix v1 uses:
+Coagent v1 uses:
 
 ```text
 Rust Runtime Core
@@ -16,8 +16,8 @@ Rust edition 2024
 Bun toolchain for TypeScript workspace, build, and tests
 ES Modules for TypeScript package format
 JSON Schema 2020-12 for review_diff test contracts
-Repo-local SQLite at .agent/coasonix.sqlite
-Root-level review_diff test contract fixture at schemas/coasonix-v1.schema.json
+Repo-local SQLite at .agent/Coagent.sqlite
+Root-level review_diff test contract fixture at schemas/coagent-v1.schema.json
 ```
 
 The architecture is:
@@ -157,10 +157,10 @@ runtime.resolve_approval
 Cargo.toml                    # Rust workspace (2 crates)
 package.json                  # Bun workspace (1 package)
 schemas/
-  coasonix-v1.schema.json     # review_diff test contract fixture
+  Coagent-v1.schema.json     # review_diff test contract fixture
 crates/
-  coasonix-runtime-core/      # kernel, policy, storage, schema, state, artifact, canonical
-  coasonix-runtime-worker/    # JSON-RPC stdio worker (thin main.rs)
+  Coagent-runtime-core/      # kernel, policy, storage, schema, state, artifact, canonical
+  coagent-runtime-worker/    # JSON-RPC stdio worker (thin main.rs)
 packages/
   reasonix-expert-mcp/        # TypeScript MCP adapter
     src/mcp/                  # server, adapter, tools/
@@ -171,7 +171,7 @@ packages/
     src/agent/                # error-taxonomy, backend-profile, naming, worker-contract
     src/codex/                # setup, health
 docs/
-  coasonix/                   # Product model + design specs
+  Coagent/                   # Product model + design specs
   implementation/             # Execution plans
 ```
 
@@ -211,7 +211,7 @@ structuredContent response mapping
 
 ## 9. Non-Goals
 
-Coasonix v1 does not include:
+Coagent v1 does not include:
 
 ```text
 local daemon
@@ -230,4 +230,6 @@ dynamic runtime as the protocol adapter.
 
 All Rust: rejected because the MCP adapter surface is faster and lower-risk
 in TypeScript, while Rust stays focused on the enforceable runtime core.
+
+
 

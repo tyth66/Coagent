@@ -1,18 +1,18 @@
 # SQLite Persistence
 
-> **实现状态**：此文档描述的 SQLite 持久化层已在 `crates/coasonix-runtime-core/src/storage/mod.rs`
+> **实现状态**：此文档描述的 SQLite 持久化层已在 `crates/Coagent-runtime-core/src/storage/mod.rs`
 > 中实现。10 张表、WAL 模式、append-only 触发器、FK 均已在代码中。
 > 部分 post-v1 表（`policy_evaluation_results`、`artifacts`）已创建但写入路径
 > 未完全使用。
 
-Coasonix v1 uses a repo-local SQLite database for runtime state. SQLite is part
+Coagent v1 uses a repo-local SQLite database for runtime state. SQLite is part
 of the safety boundary because task state, audit ordering, runtime decisions,
 locks, and cache metadata must survive Rust worker restarts.
 
 Database location:
 
 ```text
-.agent/coasonix.sqlite
+.agent/Coagent.sqlite
 ```
 
 Artifacts remain ordinary files under `.agent/`. SQLite stores their metadata,
@@ -244,7 +244,7 @@ Migration order:
 
 ## 4. Audit Append-Only Rule
 
-Audit is append-only inside SQLite. Coasonix uses a hybrid ordering model:
+Audit is append-only inside SQLite. Coagent uses a hybrid ordering model:
 
 ```text
 id            = global database order
@@ -455,7 +455,7 @@ Rules:
 v1 conformance must test:
 
 ```text
-database created under .agent/coasonix.sqlite
+database created under .agent/Coagent.sqlite
 foreign keys enabled
 audit update rejected
 audit delete rejected
@@ -468,3 +468,5 @@ stale lock detected on startup
 cache metadata can be recorded without enabling v1 cache-hit reuse
 cache corruption denies reuse only
 ```
+
+

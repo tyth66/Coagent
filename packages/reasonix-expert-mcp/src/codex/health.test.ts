@@ -23,10 +23,10 @@ describe("Codex MCP healthcheck", () => {
       codexCommand: "codex",
       bunCommand: process.execPath,
       run: async (_command, args) => {
-        if (args.join(" ") === "mcp get coasonix") {
-          return { exitCode: 1, stdout: "", stderr: "No MCP server named coasonix" };
+        if (args.join(" ") === "mcp get Coagent") {
+          return { exitCode: 1, stdout: "", stderr: "No MCP server named Coagent" };
         }
-        return { exitCode: 0, stdout: "coasonix enabled\n", stderr: "" };
+        return { exitCode: 0, stdout: "coagent enabled\n", stderr: "" };
       },
       skipGatewaySmoke: true,
     });
@@ -64,7 +64,7 @@ describe("Codex MCP healthcheck", () => {
       targetRepo: createFixtureRepo("runtime-failure"),
       codexCommand: "codex",
       bunCommand: process.execPath,
-      runtimeWorker: resolve(repoRoot, "target/debug/missing-coasonix-runtime-worker.exe"),
+      runtimeWorker: resolve(repoRoot, "target/debug/missing-Coagent-runtime-worker.exe"),
       run: codexRegistered,
     });
 
@@ -115,7 +115,7 @@ describe("Codex MCP healthcheck", () => {
       ["mock_review_diff", "pass"],
       ["runtime_shutdown", "pass"],
     ]);
-    expect(formatHealthReport(report)).toContain("Coasonix Codex MCP health: pass");
+    expect(formatHealthReport(report)).toContain("coagent Codex MCP health: pass");
   });
 
   test("CLI exits nonzero and writes a report when Codex config is missing", async () => {
@@ -144,7 +144,7 @@ describe("Codex MCP healthcheck", () => {
 
     expect(exitCode).toBe(1);
     expect(stderr).toBe("");
-    expect(stdout).toContain("Coasonix Codex MCP health: fail");
+    expect(stdout).toContain("coagent Codex MCP health: fail");
     expect(stdout).toContain("codex_mcp_not_registered");
   });
 
@@ -168,17 +168,17 @@ describe("Codex MCP healthcheck", () => {
 });
 
 async function codexRegistered(_command: string, args: string[]) {
-  if (args.join(" ") === "mcp get coasonix") {
-    return { exitCode: 0, stdout: "coasonix\n", stderr: "" };
+  if (args.join(" ") === "mcp get Coagent") {
+    return { exitCode: 0, stdout: "coagent\n", stderr: "" };
   }
   if (args.join(" ") === "mcp list") {
-    return { exitCode: 0, stdout: "coasonix enabled\n", stderr: "" };
+    return { exitCode: 0, stdout: "coagent enabled\n", stderr: "" };
   }
   return { exitCode: 1, stdout: "", stderr: `unexpected command: ${args.join(" ")}` };
 }
 
 function createFixtureRepo(name: string): string {
-  const repo = mkdtempSync(join(tmpdir(), `coasonix-health-${name}-`));
+  const repo = mkdtempSync(join(tmpdir(), `coagent-health-${name}-`));
   mkdirSync(join(repo, ".agent", "diffs"), { recursive: true });
   mkdirSync(join(repo, ".agent", "results"), { recursive: true });
   writeFileSync(join(repo, ".agent", "diffs", "current.diff"), "diff --git a/a.txt b/a.txt\n");
@@ -186,7 +186,7 @@ function createFixtureRepo(name: string): string {
 }
 
 function failingBackendCommand(): string[] {
-  const dir = mkdtempSync(join(tmpdir(), "coasonix-health-backend-"));
+  const dir = mkdtempSync(join(tmpdir(), "coagent-health-backend-"));
   const script = join(dir, "backend-fails.mjs");
   writeFileSync(
     script,
@@ -207,18 +207,18 @@ function failingBackendCommand(): string[] {
 }
 
 function fakeCodexCommand(options: { registered: boolean }): string {
-  const dir = mkdtempSync(join(tmpdir(), "coasonix-health-fake-codex-"));
+  const dir = mkdtempSync(join(tmpdir(), "coagent-health-fake-codex-"));
 
   if (process.platform !== "win32") {
     const command = join(dir, "codex");
     writeFileSync(
       command,
       `#!/usr/bin/env sh
-if [ "$1 $2 $3" = "mcp get coasonix" ]; then
-  ${options.registered ? 'printf "coasonix\\n"; exit 0' : 'printf "No MCP server named coasonix\\n" >&2; exit 1'}
+if [ "$1 $2 $3" = "mcp get Coagent" ]; then
+  ${options.registered ? 'printf "coagent\\n"; exit 0' : 'printf "No MCP server named Coagent\\n" >&2; exit 1'}
 fi
 if [ "$1 $2" = "mcp list" ]; then
-  printf "coasonix enabled\\n"; exit 0
+  printf "coagent enabled\\n"; exit 0
 fi
 printf "unexpected command\\n" >&2
 exit 2
@@ -232,10 +232,11 @@ exit 2
   writeFileSync(
     command,
     options.registered
-      ? `@echo off\r\nif "%1 %2 %3"=="mcp get coasonix" echo coasonix& exit /b 0\r\nif "%1 %2"=="mcp list" echo coasonix enabled& exit /b 0\r\necho unexpected command 1>&2\r\nexit /b 2\r\n`
-      : `@echo off\r\nif "%1 %2 %3"=="mcp get coasonix" echo No MCP server named coasonix 1>&2& exit /b 1\r\nif "%1 %2"=="mcp list" echo coasonix enabled& exit /b 0\r\necho unexpected command 1>&2\r\nexit /b 2\r\n`,
+      ? `@echo off\r\nif "%1 %2 %3"=="mcp get Coagent" echo Coagent& exit /b 0\r\nif "%1 %2"=="mcp list" echo Coagent enabled& exit /b 0\r\necho unexpected command 1>&2\r\nexit /b 2\r\n`
+      : `@echo off\r\nif "%1 %2 %3"=="mcp get Coagent" echo No MCP server named Coagent 1>&2& exit /b 1\r\nif "%1 %2"=="mcp list" echo Coagent enabled& exit /b 0\r\necho unexpected command 1>&2\r\nexit /b 2\r\n`,
   );
   return command;
 }
+
 
 

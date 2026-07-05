@@ -15,7 +15,7 @@ The rules here refine, but do not replace:
 - `05-observability-contract.md`
 - `../03-reasonix/03-cache-engineering-model.md` (post-v1)
 - `../04-patch-and-verification/*` (post-v1)
-- `../../../schemas/coasonix-v1.schema.json` (active fixture)
+- `../../../schemas/coagent-v1.schema.json` (active fixture)
 
 If this document conflicts with a safety rule, the stricter rule wins.
 
@@ -392,7 +392,7 @@ schema_shim_applied
 Storage rules:
 
 ```text
-1. Audit rows are stored in .agent/coasonix.sqlite.
+1. Audit rows are stored in .agent/Coagent.sqlite.
 2. SQLite triggers reject UPDATE and DELETE on audit_events.
 3. Existing audit rows must never be rewritten or removed.
 4. audit_events.id is the global monotonic database order.
@@ -646,3 +646,5 @@ approval:
 
 Passing this matrix is the minimum bar for enabling `reasonix.propose_patch`
 outside experimental local runs.
+
+

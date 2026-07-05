@@ -186,7 +186,7 @@ Tools only READ and WRITE explicit state.
 
 ### 20.6.1 Reasonix Project Memory Evidence Boundary
 
-Reasonix project memory / history / project knowledge may enter Coasonix only through explicit projection and structured output.
+Reasonix project memory / history / project knowledge may enter Coagent only through explicit projection and structured output.
 
 Allowed role:
 
@@ -226,7 +226,7 @@ Session 禁止用途：
 
 ### 20.7.1 Reasonix Project / Session Lane / Tool Call Mapping
 
-Coasonix 区分三层边界：
+Coagent 区分三层边界：
 
 ```text
 Global Reasonix Runtime = binary/provider/tool-schema/global-prefix boundary
@@ -235,7 +235,7 @@ Reasonix Session Lane = cache-stable inference boundary
 Reasonix Tool Call = Codex-visible MCP invocation
 ```
 
-同一个 Coasonix task 在兼容的 repo_root / worktree / Reasonix config / policy / runtime version 上的多个 `reasonix.*` 调用，必须路由到同一个 Reasonix Project Controller；但不应全部混进一个单一 Reasonix session。
+同一个 Coagent task 在兼容的 repo_root / worktree / Reasonix config / policy / runtime version 上的多个 `reasonix.*` 调用，必须路由到同一个 Reasonix Project Controller；但不应全部混进一个单一 Reasonix session。
 
 不同项目必须路由到不同 Reasonix Project Controller。它们不能共享 session、task_state、artifact paths、result cache、patch proposals、context projection、audit namespace 或 permission profile。
 
@@ -321,3 +321,4 @@ Reasonix owns inference,
 MCP owns context boundary,
 Cache owns performance,
 State object owns continuity.
+

@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use coasonix_runtime_core::schema::{SchemaRegistry, parse_json_no_duplicate_keys};
+use coagent_runtime_core::schema::{SchemaRegistry, parse_json_no_duplicate_keys};
 use serde_json::json;
 
 fn schema_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../schemas/coasonix-v1.schema.json")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../schemas/coagent-v1.schema.json")
 }
 
 fn valid_review_result() -> serde_json::Value {
@@ -201,3 +201,6 @@ fn malformed_json_returns_schema_error_without_panic() {
 
     assert!(error.to_string().contains("invalid JSON"));
 }
+
+
+

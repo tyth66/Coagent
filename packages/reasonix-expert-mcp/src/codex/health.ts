@@ -59,7 +59,7 @@ export async function healthCodexMcp(options: HealthOptions): Promise<HealthRepo
 }
 
 export function formatHealthReport(report: HealthReport): string {
-  const lines = [`Coasonix Codex MCP health: ${report.status}`];
+  const lines = [`coagent Codex MCP health: ${report.status}`];
   for (const check of report.checks) {
     const layer = check.layer ? `${check.layer}:` : "";
     const suffix = check.code ? ` (${layer}${check.code})` : "";
@@ -75,7 +75,7 @@ async function checkCodexRegistration(
 ): Promise<HealthCheck> {
   let getResult: CommandResult;
   try {
-    getResult = await run(codexCommand, ["mcp", "get", "coasonix"]);
+    getResult = await run(codexCommand, ["mcp", "get", "coagent"]);
   } catch (error) {
     return fail("codex_registration", ERROR_CODES.CODEX_MCP_NOT_REGISTERED, formatError(error));
   }
@@ -92,11 +92,11 @@ async function checkCodexRegistration(
   if (listResult.exitCode !== 0) {
     return fail("codex_registration", ERROR_CODES.CODEX_MCP_NOT_REGISTERED, listResult.stderr || listResult.stdout);
   }
-  if (!listResult.stdout.includes("coasonix")) {
-    return fail("codex_registration", ERROR_CODES.CODEX_MCP_NOT_REGISTERED, "codex mcp list did not include coasonix");
+  if (!listResult.stdout.includes("coagent")) {
+    return fail("codex_registration", ERROR_CODES.CODEX_MCP_NOT_REGISTERED, "codex mcp list did not include Coagent");
   }
 
-  return pass("codex_registration", "coasonix is registered and listed");
+  return pass("codex_registration", "coagent is registered and listed");
 }
 
 async function checkGatewaySmoke(options: HealthOptions): Promise<HealthCheck[]> {
@@ -134,7 +134,7 @@ async function checkGatewaySmoke(options: HealthOptions): Promise<HealthCheck[]>
     const initialize = await client.request("initialize", {
       protocolVersion: "2025-06-18",
       capabilities: {},
-      clientInfo: { name: "coasonix-healthcheck", version: "0.0.0" },
+      clientInfo: { name: "coagent-healthcheck", version: "0.0.0" },
     });
     if (initialize.result?.serverInfo?.name !== "reasonix-expert-mcp") {
       checks.push(fail("runtime_initialize", ERROR_CODES.SERVER_STARTUP_FAILED, "initialize returned unexpected serverInfo"));
@@ -186,9 +186,9 @@ function buildServerLaunch(options: HealthOptions, runtimeWorker: string): Serve
   }
 
   const env = parseEnvArgs(invocation.args.slice(0, separator));
-  env.COASONIX_RUNTIME_WORKER = runtimeWorker;
+  env.COAGENT_RUNTIME_WORKER = runtimeWorker;
   if (options.agentCommand) {
-    env.COASONIX_AGENT_COMMAND_JSON = JSON.stringify(options.agentCommand);
+    env.COAGENT_AGENT_COMMAND_JSON = JSON.stringify(options.agentCommand);
   }
 
   return {
@@ -222,8 +222,8 @@ async function ensureRuntimeWorkerForHealth(
     resolve(
       options.repoRoot,
       process.platform === "win32"
-        ? "target/debug/coasonix-runtime-worker.exe"
-        : "target/debug/coasonix-runtime-worker",
+        ? "target/debug/Coagent-runtime-worker.exe"
+        : "target/debug/Coagent-runtime-worker",
     );
   if (options.runtimeWorker || existsSync(workerPath) || options.buildRuntimeWorker === false) {
     return existsSync(workerPath)
@@ -233,7 +233,7 @@ async function ensureRuntimeWorkerForHealth(
 
   let build: CommandResult;
   try {
-    build = await runCommand("cargo", ["build", "-p", "coasonix-runtime-worker"], {
+    build = await runCommand("cargo", ["build", "-p", "coagent-runtime-worker"], {
       cwd: resolve(options.repoRoot),
     });
   } catch (error) {
@@ -321,7 +321,7 @@ function reviewDiffInput(repoRoot: string) {
     task_id: "TASK-health-review-diff",
     request_id: "REQ-health-review-diff",
     mode: "review_diff",
-    goal: "Run Coasonix healthcheck review_diff.",
+    goal: "Run Coagent healthcheck review_diff.",
     repo: { root: repoRoot },
     artifacts: { diff_path: ".agent/diffs/current.diff" },
     permission_level: "L1_DIFF_REVIEW",
@@ -331,7 +331,7 @@ function reviewDiffInput(repoRoot: string) {
 
 function classifyStartupFailure(message: string, stderr: string): HealthCheck {
   const combined = `${message}\n${stderr}`;
-  if (/runtime|worker|coasonix-runtime-worker/i.test(combined)) {
+  if (/runtime|worker|Coagent-runtime-worker/i.test(combined)) {
     return fail("runtime_initialize", ERROR_CODES.RUNTIME_UNAVAILABLE, combined.trim());
   }
   return fail("server_startup", ERROR_CODES.SERVER_STARTUP_FAILED, combined.trim());
@@ -432,10 +432,10 @@ if (import.meta.main) {
   if (argv.includes("--help") || argv.includes("-h")) {
     process.stdout.write(`Usage: bun run health:codex-mcp [options]
 
-Check Coasonix Codex MCP gateway health.
+Check Coagent Codex MCP gateway health.
 
 Options:
-  --repo-root <path>     Coasonix repository root (default: auto-detect)
+  --repo-root <path>     Coagent repository root (default: auto-detect)
   --target-repo <path>   Target repository to healthcheck against
   --profile <name>       Backend profile: mock (default), conformance, reasonix-cli, mimocode-cli
   --codex-command <cmd>  Codex CLI command (default: codex)
@@ -464,4 +464,6 @@ Example:
       process.exit(1);
     });
 }
+
+
 

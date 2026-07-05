@@ -246,7 +246,7 @@ function defaultMockWorkerCommand(repoRoot: string): string[] {
   return [
     resolve(
       repoRoot,
-      process.platform === "win32" ? "bin/coasonix-mock-worker.cmd" : "bin/coasonix-mock-worker",
+      process.platform === "win32" ? "bin/Coagent-mock-worker.cmd" : "bin/Coagent-mock-worker",
     ),
     "review-diff",
   ];
@@ -313,3 +313,4 @@ Examples:
       process.exit(1);
     });
 }
+

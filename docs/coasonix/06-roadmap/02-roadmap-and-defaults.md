@@ -15,7 +15,7 @@ Rust Runtime Core (state + policy + audit)
 Rust JSON-RPC stdio Runtime Worker
 TypeScript MCP Adapter
 mock Reasonix review_diff vertical slice
-repo-local SQLite at .agent/coasonix.sqlite
+repo-local SQLite at .agent/Coagent.sqlite
 ```
 
 MVP engineering defaults (all implemented):
@@ -119,3 +119,5 @@ Policy is the boundary.
 Audit is traceability.
 Human approval is the high-risk safety net.
 ```
+
+

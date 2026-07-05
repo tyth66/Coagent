@@ -92,7 +92,7 @@ export interface ReviewDiffInput {
 
 export const reviewDiffHandler: ToolHandler = {
   name: EXTERNAL_REVIEW_DIFF_TOOL_NAME,
-  description: "Review a prepared diff through the Coasonix runtime gate.",
+  description: "Review a prepared diff through the Coagent runtime gate.",
   inputSchema: INPUT_SCHEMA,
 
   normalizeInput(value: unknown, nextTaskId: () => string, nextRequestId: () => string) {
@@ -168,6 +168,7 @@ export const reviewDiffHandler: ToolHandler = {
     return null;
   },
 };
+
 
 
 

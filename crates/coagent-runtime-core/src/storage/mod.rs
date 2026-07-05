@@ -90,7 +90,7 @@ impl RuntimeStore {
     ) -> Result<Self, StoreError> {
         let agent_dir = repo_root.join(".agent");
         fs::create_dir_all(&agent_dir)?;
-        let database_path = agent_dir.join("coasonix.sqlite");
+        let database_path = agent_dir.join("coagent.sqlite");
 
         match Self::open_and_migrate(&database_path, extra_migration) {
             Ok(connection) => Ok(Self {
@@ -659,4 +659,6 @@ const MIGRATIONS: &[(&str, &str)] = &[
         );",
     ),
 ];
+
+
 

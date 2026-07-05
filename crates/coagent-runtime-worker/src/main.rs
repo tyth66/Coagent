@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use coasonix_runtime_core::{
+use coagent_runtime_core::{
     kernel::{AuditEvent, RuntimeConfig, RuntimeKernel},
     policy::{CommandInvocation, PermissionLevel, ResourceSet, RuntimeOperationRequest},
 };
@@ -259,4 +259,5 @@ fn runtime_internal_error() -> JsonRpcError {
         message: "runtime_internal_error",
     }
 }
+
 

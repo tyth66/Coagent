@@ -44,8 +44,8 @@ export function buildCodexMcpAddCommand(options: SetupOptions): CommandInvocatio
   const runtimeWorker = resolve(
     repoRoot,
     process.platform === "win32"
-      ? "target/debug/coasonix-runtime-worker.exe"
-      : "target/debug/coasonix-runtime-worker",
+      ? "target/debug/Coagent-runtime-worker.exe"
+      : "target/debug/Coagent-runtime-worker",
   );
   const backend = resolveBackendProfile({
     profile: options.profile ?? "mock",
@@ -58,15 +58,15 @@ export function buildCodexMcpAddCommand(options: SetupOptions): CommandInvocatio
     args: [
       "mcp",
       "add",
-      "coasonix",
+      "coagent",
       "--env",
-      `COASONIX_REPO_ROOT=${resolve(options.targetRepo)}`,
+      `COAGENT_REPO_ROOT=${resolve(options.targetRepo)}`,
       "--env",
-      `COASONIX_RUNTIME_WORKER=${runtimeWorker}`,
+      `COAGENT_RUNTIME_WORKER=${runtimeWorker}`,
       "--env",
-      `COASONIX_AGENT_COMMAND_JSON=${JSON.stringify(backend.command)}`,
+      `COAGENT_AGENT_COMMAND_JSON=${JSON.stringify(backend.command)}`,
       "--env",
-      `COASONIX_AGENT_TIMEOUT_MS=${backend.timeoutMs}`,
+      `COAGENT_AGENT_TIMEOUT_MS=${backend.timeoutMs}`,
       "--",
       options.bunCommand ?? process.execPath,
       "run",
@@ -101,17 +101,17 @@ async function verifyCodexRegistration(
   codexCommand: string,
   run: (command: string, args: string[], options?: { cwd?: string }) => Promise<CommandResult>,
 ): Promise<void> {
-  const getResult = await run(codexCommand, ["mcp", "get", "coasonix"]);
+  const getResult = await run(codexCommand, ["mcp", "get", "coagent"]);
   if (getResult.exitCode !== 0) {
-    throw new Error(`codex mcp get coasonix failed: ${getResult.stderr || getResult.stdout}`);
+    throw new Error(`codex mcp get Coagent failed: ${getResult.stderr || getResult.stdout}`);
   }
 
   const listResult = await run(codexCommand, ["mcp", "list"]);
   if (listResult.exitCode !== 0) {
     throw new Error(`codex mcp list failed: ${listResult.stderr || listResult.stdout}`);
   }
-  if (!listResult.stdout.includes("coasonix")) {
-    throw new Error("codex mcp list did not include coasonix");
+  if (!listResult.stdout.includes("coagent")) {
+    throw new Error("codex mcp list did not include Coagent");
   }
 }
 
@@ -122,13 +122,13 @@ async function ensureRuntimeWorker(
   const workerPath = resolve(
     repoRoot,
     process.platform === "win32"
-      ? "target/debug/coasonix-runtime-worker.exe"
-      : "target/debug/coasonix-runtime-worker",
+      ? "target/debug/Coagent-runtime-worker.exe"
+      : "target/debug/Coagent-runtime-worker",
   );
   if (existsSync(workerPath)) {
     return;
   }
-  const result = await run("cargo", ["build", "-p", "coasonix-runtime-worker"], { cwd: repoRoot });
+  const result = await run("cargo", ["build", "-p", "coagent-runtime-worker"], { cwd: repoRoot });
   if (result.exitCode !== 0) {
     throw new Error(`failed to build runtime worker: ${result.stderr || result.stdout}`);
   }
@@ -181,11 +181,11 @@ if (import.meta.main) {
   if (argv.includes("--help") || argv.includes("-h")) {
     process.stdout.write(`Usage: bun run setup:codex-mcp [options]
 
-Register Coasonix as a Codex MCP server.
+Register Coagent as a Codex MCP server.
 
 Options:
-  --repo-root <path>     Coasonix repository root (default: auto-detect)
-  --target-repo <path>   Target repository to register Coasonix for
+  --repo-root <path>     Coagent repository root (default: auto-detect)
+  --target-repo <path>   Target repository to register Coagent for
   --profile <name>       Backend profile: mock (default), conformance, reasonix-cli, mimocode-cli
   --codex-command <cmd>  Codex CLI command (default: codex)
   --bun-command <cmd>    Bun executable path (default: auto-detect)
@@ -206,7 +206,7 @@ Example:
 
   setupCodexMcp({ repoRoot, targetRepo, profile, codexCommand, bunCommand })
     .then((result) => {
-      process.stdout.write(result.stdout || "Registered Coasonix MCP server.\n");
+      process.stdout.write(result.stdout || "Registered Coagent MCP server.\n");
     })
     .catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -214,4 +214,6 @@ Example:
       process.exit(1);
     });
 }
+
+
 

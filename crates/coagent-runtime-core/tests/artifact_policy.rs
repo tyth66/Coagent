@@ -4,14 +4,14 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use coasonix_runtime_core::artifact::{ArtifactPolicy, ArtifactPolicyError, ResourceAccess};
+use coagent_runtime_core::artifact::{ArtifactPolicy, ArtifactPolicyError, ResourceAccess};
 
 fn temp_repo(name: &str) -> PathBuf {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("coasonix-{name}-{unique}"));
+    let root = std::env::temp_dir().join(format!("coagent-{name}-{unique}"));
     fs::create_dir_all(root.join(".agent/diffs")).expect("create agent dirs");
     fs::create_dir_all(root.join(".agent/context")).expect("create context dirs");
     fs::create_dir_all(root.join("docs/public")).expect("create docs dirs");
@@ -135,3 +135,5 @@ fn windows_case_folded_repo_path_is_still_repo_local() {
 
     assert!(normalized.starts_with(&repo));
 }
+
+

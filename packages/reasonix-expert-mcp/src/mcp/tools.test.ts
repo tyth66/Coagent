@@ -42,7 +42,7 @@ describe("tools/list", () => {
         output_schema: { const: "review_result_v1" },
       },
     });
-    expect(JSON.stringify(tool.inputSchema)).not.toContain("coasonix.local");
+    expect(JSON.stringify(tool.inputSchema)).not.toContain("coagent.local");
     expect(JSON.stringify(tool.inputSchema)).not.toContain("\"$ref\"");
   });
 });
@@ -572,5 +572,6 @@ function reviewResult(taskId: string, requestId: string) {
     confidence: 0.9,
   };
 }
+
 
 

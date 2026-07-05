@@ -3,12 +3,12 @@
 > **设计规格（Design Specification）**：此文档描述的是 post-v1 兼容性策略。
 > 当前 v1 无多版本共存场景，兼容性规则尚未被代码执行。
 
-Coasonix has four versioned surfaces: Codex contract, Wrapper protocol, Reasonix runtime contract, and Schema/tool contract. This file defines compatibility rules so the system does not gradually fragment.
+Coagent has four versioned surfaces: Codex contract, Wrapper protocol, Reasonix runtime contract, and Schema/tool contract. This file defines compatibility rules so the system does not gradually fragment.
 
 ## 1. Versioned Surfaces
 
 ```text
-coasonix_framework_version
+Coagent_framework_version
 wrapper_protocol_version
 reasonix_runtime_version
 tool_contract_version
@@ -38,11 +38,11 @@ Initialize response must include:
 
 ```json
 {
-  "coasonix_framework_version": "0.2",
+  "Coagent_framework_version": "0.2",
   "wrapper_protocol_version": "1.0.0",
   "reasonix_project_routing_version": "1.0.0",
   "reasonix_session_lane_version": "1.0.0",
-  "supported_schema_families": ["coasonix.v1"],
+  "supported_schema_families": ["Coagent.v1"],
   "supported_session_lanes": ["review", "security", "debug", "performance", "architecture", "patch"],
   "supported_tools": {
     "reasonix.review_diff": ["review_result_v1"],
@@ -137,3 +137,4 @@ project_key hash recorded for every Reasonix call
 session_key hash and lane recorded for every Reasonix call
 patch-capable tools do not route to read-only lanes
 ```
+

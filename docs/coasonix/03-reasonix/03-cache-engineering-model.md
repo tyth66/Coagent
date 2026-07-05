@@ -27,7 +27,7 @@ cache_key =
   hash(static_base_prefix)
   + tool_name
   + schema_version
-  + coasonix_policy_hash
+  + Coagent_policy_hash
   + context_projection_hash
   + delta_context_hash
   + reasonix_runtime_version
@@ -43,19 +43,19 @@ project_key =
   + worktree_id
   + base_branch
   + reasonix_config_hash
-  + coasonix_policy_hash
+  + Coagent_policy_hash
   + schema_family
   + reasonix_runtime_version
 
 session_key =
   project_key
-  + coasonix_task_id
+  + Coagent_task_id
   + lane
   + model
   + permission_level
   + static_prefix_hash
   + schema_family
-  + coasonix_policy_hash
+  + Coagent_policy_hash
   + reasonix_runtime_version
 ```
 
@@ -116,7 +116,7 @@ Invalidate result cache when any of the following changes:
 ```text
 schema_version
 tool definition
-coasonix_policy_hash
+Coagent_policy_hash
 context_projection_hash
 delta_context_hash
 reasonix runtime version
@@ -157,7 +157,7 @@ Forbidden:
 
 ```text
 reuse patch proposal across different base_revision
-reuse result when coasonix_policy_hash changes
+reuse result when Coagent_policy_hash changes
 reuse result when schema_version differs
 reuse result for L2_PATCH_ONLY or L3_ISOLATED_WORKTREE side-effect-bearing flows
 reuse one session lane across different role/model/permission/policy boundaries
@@ -177,7 +177,7 @@ reuse patch proposal cache across different Project Controllers
 4. Cache must not store secrets after redaction.
 5. Cache failure must degrade to live Reasonix call, not skip validation.
 6. Session lane reuse must still emit routing and audit metadata.
-7. Patch lane result reuse is disabled unless exact base_revision, coasonix_policy_hash, schema_family, and static_prefix_hash match.
+7. Patch lane result reuse is disabled unless exact base_revision, Coagent_policy_hash, schema_family, and static_prefix_hash match.
 8. Cross-project cache hits are denied except for byte-identical global static prefix.
 ```
 
@@ -205,3 +205,4 @@ lane
 hit
 invalidation_reason
 ```
+

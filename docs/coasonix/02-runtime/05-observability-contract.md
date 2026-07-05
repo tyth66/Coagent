@@ -5,7 +5,7 @@
 > 文档中描述的 metrics counters、tracing spans、debug hooks、SLO 阈值均未实现。
 > Rust 代码中无 `tracing` crate，无 metrics 导出，无 span 构造。
 
-Audit log explains what happened. Observability explains how the agent system behaves over time. Coasonix requires metrics, traces, and debugging hooks in addition to audit events.
+Audit log explains what happened. Observability explains how the agent system behaves over time. Coagent requires metrics, traces, and debugging hooks in addition to audit events.
 
 ## 1. Metrics
 
@@ -166,3 +166,4 @@ reasonix_snapshot_mismatches_total > 0 -> inspect concurrent task snapshot handl
 patch_rejection_rate > 40% -> inspect patch prompt or checker strictness
 human_approval_rate spike -> inspect scope classification
 ```
+

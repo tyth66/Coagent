@@ -6,7 +6,7 @@
 > 在当前 v1 中部分由 Policy Engine 和 ArtifactPolicy 覆盖，但 projection 层
 > 的 redaction、compression、hashing 未实现。
 
-Context Projection 是 Coasonix 最容易被攻击的节点之一。本文件定义上下文投影攻击面、处理规则和测试模型。
+Context Projection 是 Coagent 最容易被攻击的节点之一。本文件定义上下文投影攻击面、处理规则和测试模型。
 
 ## 1. Assets
 
@@ -111,4 +111,5 @@ Minimum test cases:
 4. projection_hash changes when projected evidence changes.
 5. Reasonix receives enough context to reason about the threat without receiving raw secrets.
 ```
+
 

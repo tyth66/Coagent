@@ -40,7 +40,7 @@ describe("Codex-facing error taxonomy", () => {
       repoRoot: process.cwd(),
       targetRepo: process.cwd(),
       skipGatewaySmoke: true,
-      run: async () => ({ exitCode: 1, stdout: "", stderr: "No MCP server named coasonix" }),
+      run: async () => ({ exitCode: 1, stdout: "", stderr: "No MCP server named Coagent" }),
     });
 
     expect(report.checks[0]).toMatchObject({
@@ -73,3 +73,4 @@ describe("Codex-facing error taxonomy", () => {
     });
   });
 });
+

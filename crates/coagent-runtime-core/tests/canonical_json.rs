@@ -1,4 +1,4 @@
-use coasonix_runtime_core::canonical::{canonical_hash, canonical_json};
+use coagent_runtime_core::canonical::{canonical_hash, canonical_json};
 use serde_json::json;
 
 #[test]
@@ -64,3 +64,4 @@ fn non_finite_numbers_do_not_enter_json_values() {
     assert!(serde_json::Number::from_f64(f64::INFINITY).is_none());
     assert!(serde_json::Number::from_f64(f64::NEG_INFINITY).is_none());
 }
+

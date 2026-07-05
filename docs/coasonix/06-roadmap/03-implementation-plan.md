@@ -1,7 +1,7 @@
 # Implementation Plan and Critical Node Definitions (Design Reference)
 
 This document defines the 16 critical nodes that must be stable, auditable, and
-verifiable in any Coasonix implementation. These nodes are design boundaries,
+verifiable in any Coagent implementation. These nodes are design boundaries,
 not implementation status claims.
 
 **For current implementation status, see:**
@@ -13,7 +13,7 @@ not implementation status claims.
 
 ---# Implementation Plan and Critical Node Definitions
 
-本文保留原“关键节点定义与工程规格”的完整语义，并将其作为实现计划的节点级检查清单。它定义 Coasonix 中必须稳定、可审计、可验证的关键节点。
+本文保留原“关键节点定义与工程规格”的完整语义，并将其作为实现计划的节点级检查清单。它定义 Coagent 中必须稳定、可审计、可验证的关键节点。
 
 这些节点不是概念说明，而是实现边界。任何 `reasonix-expert` Wrapper、Codex 编排器、策略引擎、审计系统或 CI Adapter 的实现，都必须能映射到这些节点。
 
@@ -266,11 +266,11 @@ Reasonix relies on hidden memory
 
 MCP Session and Transport defines how Codex initializes, lists, and calls
 `reasonix-expert` tools through STDIO in v1. Streamable HTTP is a non-v1
-deployment option only if Coasonix later becomes a shared service.
+deployment option only if Coagent later becomes a shared service.
 
 The process boundary starts at Codex startup: Codex starts the configured
 `reasonix-expert` MCP server process and initializes the MCP protocol session.
-`tools/call` does not start a new process; it allocates or routes the Coasonix
+`tools/call` does not start a new process; it allocates or routes the Coagent
 logical session for a task, request, and lane inside the existing adapter.
 
 ### 6.2 Lifecycle
@@ -295,7 +295,7 @@ initialize
 7. each JSON-RPC message is newline-delimited.
 8. no debug text on stdout.
 9. server handles no business request before initialization, except ping.
-10. tools/call allocates or routes Coasonix logical sessions only.
+10. tools/call allocates or routes Coagent logical sessions only.
 ```
 
 ### 6.4 Non-v1 HTTP Requirements
@@ -829,7 +829,7 @@ It ensures:
 
 ```text
 multiple Codex sessions -> same compatible Reasonix Project Controller
-different Coasonix tasks -> isolated task namespaces
+different Coagent tasks -> isolated task namespaces
 different expert lanes -> cache-stable session lanes
 cross-tool continuity -> explicit task_state and artifacts only
 ```
@@ -843,7 +843,7 @@ worktree_id
 tenant_id_or_user_id
 base_branch
 reasonix_config_hash
-coasonix_policy_hash
+Coagent_policy_hash
 schema_family
 reasonix_runtime_version
 task_id
@@ -914,3 +914,4 @@ reasonix_task_namespace_mismatch
 ```
 
 ---
+
