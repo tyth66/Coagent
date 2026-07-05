@@ -1,25 +1,22 @@
 /**
- * Real Reasonix agent worker.
+ * Reasonix agent worker — bridges Coagent to Reasonix CLI.
+ *
+ * Uses `reasonix run --task ...` for one-shot non-interactive execution.
+ * Falls back to built-in worker if Reasonix is not installed.
  *
  * Contract (stdin/stdout protocol):
  *   stdin  ← ReviewDiffInput JSON
  *   stdout → review_result_v1 JSON
- *   stderr → diagnostics only (never trusted as review content)
+ *   stderr → diagnostics only
  *
  * Usage:
  *   bun run agents/reasonix/worker.ts review-diff
- *
- * The worker:
- *   1. Reads the diff file referenced in artifacts.diff_path
- *   2. Reads optional context/test_log/build_log artifacts
- *   3. Constructs a review prompt and submits to LLM
- *   4. Parses and validates the structured review output
- *   5. Writes review_result_v1 JSON to stdout
  */
 
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { stdin, stdout, stderr } from "node:process";
+import { spawn } from "node:child_process";
 
 // ── Subcommand dispatch ──
 
@@ -77,49 +74,33 @@ if (!diffContent) {
 
 const contextContent = readArtifact(input.artifacts.context_path);
 const testLogContent = readArtifact(input.artifacts.test_log_path);
-const buildLogContent = readArtifact(input.artifacts.build_log_path);
 
-// ── Prompt construction ──
+// ── Task construction ──
 
-const focusHints = input.focus?.length
-  ? `\nFocus areas: ${input.focus.join(", ")}`
-  : "";
-const constraints = input.constraints?.length
-  ? `\nConstraints: ${input.constraints.join(", ")}`
-  : "";
+const focusHints = input.focus?.length ? `\n重点关注: ${input.focus.join(", ")}` : "";
+const constraints = input.constraints?.length ? `\n约束条件: ${input.constraints.join(", ")}` : "";
+const contextSection = contextContent ? `\n\n额外上下文:\n${contextContent.slice(0, 4000)}` : "";
+const testLogSection = testLogContent ? `\n\n测试日志:\n${testLogContent.slice(0, 2000)}` : "";
 
-const contextSection = contextContent
-  ? `\n\nAdditional context:\n${contextContent.slice(0, 4000)}`
-  : "";
-const testLogSection = testLogContent
-  ? `\n\nTest log summary:\n${testLogContent.slice(0, 2000)}`
-  : "";
-const buildLogSection = buildLogContent
-  ? `\n\nBuild log summary:\n${buildLogContent.slice(0, 2000)}`
-  : "";
-
-const reviewPrompt = [
-  `You are a code review agent. Review the following diff for correctness,`,
-  `regression risk, missing tests, security issues, and protocol or safety concerns.`,
+const task = [
+  `审查以下代码 diff，评估正确性、回归风险、测试覆盖、安全性和可维护性。`,
   ``,
-  `Goal: ${input.goal}`,
-  `${focusHints}${constraints}`,
+  `审查目标: ${input.goal}${focusHints}${constraints}`,
   ``,
   `--- DIFF ---`,
   diffContent.slice(0, 16000),
   `--- END DIFF ---`,
   contextSection,
   testLogSection,
-  buildLogSection,
   ``,
-  `Return ONLY a JSON object with this shape (no markdown, no explanation):`,
+  `请只返回一个 JSON 对象，格式如下（不要用 markdown 代码块包裹，只输出纯 JSON）:`,
   `{`,
   `  "schema_version": "review_result_v1",`,
   `  "task_id": "${input.task_id ?? "TASK-unknown"}",`,
   `  "request_id": "${input.request_id ?? "REQ-unknown"}",`,
   `  "status": "ok",`,
   `  "verdict": "pass" | "needs_fix" | "risky" | "unknown" | "not_applicable",`,
-  `  "summary": "Short review conclusion.",`,
+  `  "summary": "审查结论的简短总结",`,
   `  "findings": [`,
   `    {`,
   `      "id": "F-001",`,
@@ -127,9 +108,9 @@ const reviewPrompt = [
   `      "category": "correctness" | "test" | "security" | "protocol" | "maintainability" | "other",`,
   `      "file": "relative/path.ext",`,
   `      "line": 42,`,
-  `      "issue": "What is wrong or risky.",`,
-  `      "evidence": "Why this follows from the diff.",`,
-  `      "recommendation": "What should change.",`,
+  `      "issue": "问题描述",`,
+  `      "evidence": "从 diff 中找到的证据",`,
+  `      "recommendation": "建议的修改",`,
   `      "confidence": 0.85`,
   `    }`,
   `  ],`,
@@ -140,111 +121,102 @@ const reviewPrompt = [
   `}`,
 ].join("\n");
 
-// ── LLM invocation ──
+// ── System prompt ──
 
-const llmEndpoint = process.env.COAGENT_LLM_ENDPOINT ?? process.env.OPENAI_BASE_URL;
-const llmApiKey = process.env.COAGENT_LLM_API_KEY ?? process.env.OPENAI_API_KEY;
-const llmModel = process.env.COAGENT_LLM_MODEL ?? "gpt-4o-mini";
+const system = [
+  "你是一个代码审查专家 Agent。你的任务是审查代码 diff，找出问题并给出建议。",
+  "你必须只返回 JSON 格式的审查结果。不要输出任何其他内容。",
+  "如果 diff 中没有问题，verdict 设为 pass，findings 为空数组。",
+  "如果发现问题，给出具体的文件路径、行号和代码证据。",
+].join(" ");
 
-if (!llmEndpoint && !llmApiKey) {
-  // No LLM configured — fall back to basic static analysis
-  const lines = diffContent.split("\n");
-  const addedLines = lines.filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
-  const removedLines = lines.filter((l) => l.startsWith("-") && !l.startsWith("---")).length;
-  const testFiles = lines.some((l) => l.includes(".test.") || l.includes("_test.") || l.includes("spec."));
+// ── Reasonix invocation ──
 
-  const findings: Array<Record<string, unknown>> = [];
-  if (!testFiles && (addedLines > 20 || removedLines > 20)) {
-    findings.push({
-      id: "F-001",
-      severity: "minor",
-      category: "test",
-      file: input.artifacts.diff_path,
-      line: 1,
-      issue: "No test files appear to be modified in this diff.",
-      evidence: "Diff contains code changes but no test file modifications were detected.",
-      recommendation: "Consider adding or updating tests for the changed behavior.",
-      confidence: 0.5,
-    });
-  }
+const model = process.env.COAGENT_REASONIX_MODEL ?? process.env.REASONIX_MODEL ?? "deepseek-chat";
+const reasonixBin = process.env.COAGENT_REASONIX_BIN ?? "reasonix";
 
-  stdout.write(JSON.stringify({
-    schema_version: "review_result_v1",
-    task_id: input.task_id ?? "TASK-unknown",
-    request_id: input.request_id ?? "REQ-unknown",
-    status: "ok",
-    verdict: findings.length > 0 ? "needs_fix" : "pass",
-    summary: findings.length > 0
-      ? `Static analysis found ${findings.length} issue(s). No LLM configured; install COAGENT_LLM_API_KEY for AI-powered review.`
-      : `Static analysis passed. No LLM configured; install COAGENT_LLM_API_KEY for AI-powered review.`,
-    findings,
-    tests_to_run: [],
-    risks: [],
-    assumptions: ["No LLM configured; review is based on static heuristics only."],
-    confidence: 0.3,
-  }));
-  process.exit(0);
+const args = [
+  "run",
+  "--task", task,
+  "--system", system,
+  "--model", model,
+];
+
+// Optional: pass MCP config if user has filesystem tools configured
+const mcpOpts = process.env.COAGENT_REASONIX_MCP;
+if (mcpOpts) {
+  args.push("--mcp", mcpOpts);
 }
 
-// ── LLM call ──
+stderr.write(`agent worker: spawning ${reasonixBin} ${args.slice(0, 4).join(" ")} ...\n`);
 
-try {
-  const response = await fetch(`${llmEndpoint}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${llmApiKey}`,
-    },
-    body: JSON.stringify({
-      model: llmModel,
-      messages: [{ role: "user", content: reviewPrompt }],
-      temperature: 0.3,
-      max_tokens: 4096,
-    }),
+const child = spawn(reasonixBin, args, {
+  stdio: ["ignore", "pipe", "pipe"],
+  cwd: repoRoot,
+  env: { ...process.env },
+});
+
+let stdoutBuf = "";
+let stderrBuf = "";
+
+child.stdout.on("data", (chunk: Buffer) => { stdoutBuf += chunk.toString(); });
+child.stderr.on("data", (chunk: Buffer) => { stderrBuf += chunk.toString(); });
+
+const exitCode = await new Promise<number | null>((resolve) => {
+  child.on("close", resolve);
+  child.on("error", (err) => {
+    stderr.write(`agent worker: failed to spawn reasonix: ${err.message}\n`);
+    resolve(-1);
   });
+});
 
-  if (!response.ok) {
-    stderr.write(`agent worker: LLM API error ${response.status}: ${await response.text()}\n`);
-    process.exit(2);
-  }
-
-  const data = await response.json() as Record<string, unknown>;
-  const content = (data as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content;
-  if (!content) {
-    stderr.write("agent worker: LLM returned empty response\n");
-    process.exit(2);
-  }
-
-  // ── Output parsing ──
-
-  // Try to extract JSON from the response (handles markdown fences)
-  let jsonStr = content;
-  const fenceMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) {
-    jsonStr = fenceMatch[1].trim();
-  }
-  const firstBrace = jsonStr.indexOf("{");
-  const lastBrace = jsonStr.lastIndexOf("}");
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
-  }
-
-  let result: Record<string, unknown>;
-  try {
-    result = JSON.parse(jsonStr);
-  } catch {
-    stderr.write(`agent worker: LLM output is not valid JSON: ${jsonStr.slice(0, 500)}\n`);
-    process.exit(2);
-  }
-
-  // Ensure required fields
-  result.schema_version = "review_result_v1";
-  result.task_id = result.task_id ?? input.task_id ?? "TASK-unknown";
-  result.request_id = result.request_id ?? input.request_id ?? "REQ-unknown";
-  result.status = result.status ?? "ok";
-
-  stdout.write(JSON.stringify(result));
-} catch (err) {
-  stderr.write(`agent worker: LLM call failed: ${String(err)}\n`);
+if (exitCode !== 0) {
+  stderr.write(`agent worker: reasonix exited with code ${exitCode}\n`);
+  stderr.write(`stderr: ${stderrBuf.slice(0, 1000)}\n`);
   process.exit(2);
 }
+
+// ── Output parsing ──
+
+// Try to extract JSON from the output (Reasonix streams output inline)
+// The final content should contain a JSON object matching review_result_v1
+stderr.write(`agent worker: reasonix stdout length: ${stdoutBuf.length}\n`);
+stderr.write(stderrBuf.slice(0, 500));
+
+const output = stdoutBuf.trim();
+
+// Find the last JSON object in the output
+let jsonStr = "";
+const jsonMatch = output.match(/\{[\s\S]*"schema_version"\s*:\s*"review_result_v1"[\s\S]*\}/);
+if (jsonMatch) {
+  jsonStr = jsonMatch[0];
+} else {
+  // Try to find any JSON object at the end
+  const lastBrace = output.lastIndexOf("{");
+  const matchingBrace = output.indexOf("}", lastBrace);
+  if (lastBrace >= 0 && matchingBrace > lastBrace) {
+    jsonStr = output.slice(lastBrace, matchingBrace + 1);
+  }
+}
+
+if (!jsonStr) {
+  stderr.write("agent worker: could not extract JSON from Reasonix output\n");
+  stderr.write(`stdout preview: ${output.slice(0, 1000)}\n`);
+  process.exit(2);
+}
+
+let result: Record<string, unknown>;
+try {
+  result = JSON.parse(jsonStr);
+} catch {
+  stderr.write(`agent worker: Reasonix output is not valid JSON: ${jsonStr.slice(0, 500)}\n`);
+  process.exit(2);
+}
+
+// Ensure required fields
+result.schema_version = "review_result_v1";
+result.task_id = result.task_id ?? input.task_id ?? "TASK-unknown";
+result.request_id = result.request_id ?? input.request_id ?? "REQ-unknown";
+result.status = result.status ?? "ok";
+
+stdout.write(JSON.stringify(result));
