@@ -1,43 +1,14 @@
 import { RuntimeWorkerError } from "../worker/client";
 import { extractSingleJsonObject } from "../reasonix/output-normalizer";
 import { ERROR_CODES, errorLayerForCode } from "../agent/error-taxonomy";
-import type { ReasonixRunResult, ReasonixRunner } from "../reasonix/types";
 import { reviewDiffHandler } from "./tools/review-diff";
-
-// ── Shared interfaces ──
-
-export interface RuntimeClient {
-  call(method: string, params?: unknown): Promise<unknown>;
-}
-
-export interface ToolCallRequest {
-  name: string;
-  arguments?: unknown;
-}
-
-export interface ToolResult {
-  isError: boolean;
-  content: Array<{ type: "text"; text: string }>;
-  structuredContent?: Record<string, unknown>;
-  _meta?: Record<string, unknown>;
-}
-
-export interface ToolHandler {
-  readonly name: string;
-  readonly description: string;
-  readonly inputSchema: object;
-  normalizeInput(value: unknown, nextTaskId: () => string, nextRequestId: () => string): { ok: true; value: unknown } | { ok: false; error: string };
-  buildRuntimeRequest(input: unknown, reasonixCommand?: string[]): Record<string, unknown>;
-  invokeReasonix(runner: ReasonixRunner, input: unknown): Promise<ReasonixRunResult>;
-  validateOutput(value: Record<string, unknown>): { path: string; message: string } | null;
-}
-
-export interface ReasonixToolsAdapterOptions {
-  runtime: RuntimeClient;
-  reasonix: ReasonixRunner;
-  reasonixCommand?: string[];
-  initialized?: boolean;
-}
+import type {
+  RuntimeClient,
+  ToolCallRequest,
+  ToolResult,
+  ToolHandler,
+  ReasonixToolsAdapterOptions,
+} from "./types";
 
 // ── Runtime decision payload ──
 
@@ -210,3 +181,4 @@ function errorToolResult(code: string, summary: string, meta: Record<string, unk
 function diagnosticsMeta(stderr: string): Record<string, unknown> | undefined {
   return stderr ? { diagnostics: { stderr } } : undefined;
 }
+
