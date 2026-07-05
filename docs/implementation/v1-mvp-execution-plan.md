@@ -62,7 +62,8 @@ Reasonix, MimoCode, and other agents should enter later as backend bridges.
 | M11 | Stable startup script and operator-facing environment contract | `packages/reasonix-expert-mcp/package.json`, `README.md` |
 | M12 | Codex MCP setup installer with mock backend profile, protocol-clean startup args, and post-add registration verification | `package.json`, `packages/reasonix-expert-mcp/src/codex/`, `packages/reasonix-expert-mcp/src/reasonix/mock-worker.ts`, `bin/coasonix-mock-worker*` |
 | M13 | Codex MCP healthcheck with registration, server startup, runtime, tools/list, mock review, and shutdown diagnostics | `packages/reasonix-expert-mcp/src/codex/health.ts`, `packages/reasonix-expert-mcp/src/codex/health.test.ts`, `package.json` |
-| M14+ | Backend-neutral worker conformance | `docs/implementation/codex-side-gateway-roadmap.md` |
+| M14 | Backend-neutral Agent Worker Contract conformance for `review-diff` worker stdout/stdin/exit semantics | `packages/reasonix-expert-mcp/src/agent/worker-contract.ts`, `packages/reasonix-expert-mcp/src/agent/worker-contract.test.ts`, `package.json` |
+| M15+ | Tool naming migration, error taxonomy, and backend profiles | `docs/implementation/codex-side-gateway-roadmap.md` |
 
 Working v1 call path:
 
@@ -133,6 +134,26 @@ parses stdout as JSON-RPC response frames only
 runs one mock review_diff call through Rust runtime gates
 classifies Codex, server startup, runtime worker, backend worker, and shutdown failures separately
 writes a concise operator report and exits nonzero when any check fails
+```
+
+Agent Worker Contract conformance command:
+
+```powershell
+bun run conformance:agent-worker
+bun run conformance:agent-worker --command-json '["worker-executable","review-diff"]'
+```
+
+The worker contract is backend-neutral:
+
+```text
+argv is [worker_executable, "review-diff"]
+stdin is one review_diff_input_v1 JSON object
+stdout is exactly one review_result_v1 JSON object
+stderr is diagnostics only
+exit 0 means the worker response is available
+nonzero exit means worker failure
+task_id and request_id must match the input
+markdown-fenced JSON, multiple JSON objects, empty stdout, malformed JSON, schema mismatch, invalid confidence, timeout, and nonzero exit fail conformance
 ```
 
 Required environment:
@@ -268,6 +289,8 @@ mock profile worker emits one review_result_v1 JSON object over stdout
 health:codex-mcp reports codex_mcp_not_registered separately from server_startup_failed
 health:codex-mcp reports runtime_unavailable separately from worker_nonzero_exit
 health:codex-mcp passes against the mock profile through the real MCP server process
+conformance:agent-worker passes against the repo-local mock worker
+Agent Worker Contract validation rejects timeout, empty stdout, malformed JSON, multiple JSON objects, markdown-fenced JSON, wrong task_id, wrong request_id, schema mismatch, nonzero exit, and invalid confidence
 ```
 
 Repository verification command set:

@@ -181,6 +181,16 @@ behavior. Those remain blocked behind M14 worker conformance.
 Promote the mock Reasonix runner into a formal conformance target and separate
 the worker contract from any one backend name.
 
+Current status:
+
+```text
+implemented
+root package exposes conformance:agent-worker
+contract validation is backend-neutral and lives under packages/reasonix-expert-mcp/src/agent/
+repo-local mock worker passes the success conformance check
+contract rejects timeout, empty stdout, malformed JSON, multiple JSON objects, markdown-fenced JSON, wrong task_id, wrong request_id, schema mismatch, nonzero exit, and invalid confidence
+```
+
 The worker contract is:
 
 ```text
@@ -216,6 +226,27 @@ mock/conformance worker passes the full matrix
 real backend bridges must pass the same matrix before being recommended
 Coasonix core does not know whether the worker is Reasonix, MimoCode, or another agent
 ```
+
+Implemented entrypoints:
+
+```text
+package.json -> conformance:agent-worker
+packages/reasonix-expert-mcp/src/agent/worker-contract.ts
+packages/reasonix-expert-mcp/src/agent/worker-contract.test.ts
+```
+
+Usage:
+
+```powershell
+bun run conformance:agent-worker
+bun run conformance:agent-worker --command-json '["worker-executable","review-diff"]'
+```
+
+The first command validates the repo-local mock worker. The second validates a
+candidate backend worker's success path against the same strict stdout/stdin
+contract. Backend bridges still need their own malformed-output and failure-mode
+tests before being recommended, but they must use this contract as the shared
+acceptance surface.
 
 ## M15: Tool Naming Migration
 

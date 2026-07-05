@@ -23,9 +23,9 @@ Runtime Enforcement Layer design: complete
 Global Runtime / Project Controller isolation / Session Pool / session lane mapping: complete
 MVP engineering defaults: complete
 v1 technology baseline: Rust 2024 core, Bun ESM adapter, JSON-RPC stdio worker, SQLite persistence
-v1 implementation blueprint: complete through M13
+v1 implementation blueprint: complete through M14
 v1 MVP implementation: complete for Rust-gated reasonix.review_diff through a runnable MCP stdio server
-Codex-side gateway productization: M12 setup installer and M13 healthcheck implemented with mock profile validation
+Codex-side gateway productization: M12 setup, M13 healthcheck, and M14 Agent Worker Contract conformance implemented
 Safe autonomous patch operation: still blocked until patch safety, approval, and verification gates are implemented
 ```
 
@@ -46,8 +46,8 @@ Next implementation focus:
 
 [docs/implementation/codex-side-gateway-roadmap.md](docs/implementation/codex-side-gateway-roadmap.md)
 
-The next slice should formalize the backend-neutral Agent Worker Contract before
-adding Reasonix, MimoCode, or other backend bridges.
+The next slice should start the tool naming migration without breaking the
+external v1 `reasonix.review_diff` tool.
 
 Install the Coasonix MCP server into Codex with the mock backend profile:
 
@@ -73,6 +73,24 @@ server launch shape, confirms `initialize` and `tools/list`, runs one mock
 shutdown, and writes a concise operator report. Failures are labeled by layer,
 including `codex_mcp_not_registered`, `server_startup_failed`,
 `runtime_unavailable`, and worker failure codes.
+
+Run Agent Worker Contract conformance against the default repo-local mock
+worker:
+
+```powershell
+bun run conformance:agent-worker
+```
+
+Run the same success contract against an explicit backend worker command:
+
+```powershell
+bun run conformance:agent-worker --command-json '["worker-executable","review-diff"]'
+```
+
+The contract is backend-neutral: argv is `[worker_executable, "review-diff"]`,
+stdin is one `review_diff_input_v1` JSON object, stdout must be exactly one
+`review_result_v1` JSON object, stderr is diagnostics only, exit `0` means the
+worker response is available, and nonzero exit is a worker failure.
 
 Run the local MCP stdio server:
 
