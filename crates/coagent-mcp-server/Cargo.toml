@@ -1,0 +1,20 @@
+[package]
+name = "coagent-mcp-server"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+coagent-runtime-core.workspace = true
+rmcp = { version = "2", default-features = false, features = ["macros", "transport-io", "server"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "process"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+schemars = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+
