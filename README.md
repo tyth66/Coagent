@@ -11,9 +11,9 @@ Codex   = evaluates the result and decides the next step
 
 Start here:
 
-1. [Collaboration Model](docs/coasonix/00-collaboration-model.md)
-2. [Executive Summary / Status](docs/coasonix/00-executive-summary.md)
-3. [Documentation Index](docs/coasonix/README.md)
+1. [Collaboration Model](docs/coagent/00-collaboration-model.md)
+2. [Executive Summary / Status](docs/coagent/00-executive-summary.md)
+3. [Documentation Index](docs/coagent/README.md)
 4. [Active Forward Plan](docs/implementation/review-diff-agent-collaboration-plan.md)
 
 ## Current Focus
@@ -70,7 +70,8 @@ Codex MCP registration:                     verified (codex mcp add coagent)
 Healthcheck:                                7/7 checks pass
 Error taxonomy:                             14 codes across 6 layers
 Worker contract conformance:                implemented
-pure Reasonix review-only result contract:  active transition
+Pure review result boundary:                implemented (Reasonix returns semantic-only; Coagent wraps)
+Runtime lifecycle closure:                  pending (complete_operation / fail_operation API)
 patch / approval / autonomous write path:   out of scope
 ```
 
@@ -112,14 +113,14 @@ bun run health:codex-mcp --target-repo D:\path\to\target-repo
 
 | Layer | Path | Purpose |
 |---|---|---|
-| Product model | `docs/coasonix/00-collaboration-model.md` | Codex / Coagent / Reasonix decision chain |
-| Current status | `docs/coasonix/00-executive-summary.md` | Implemented vs planned vs out-of-scope |
+| Product model | `docs/coagent/00-collaboration-model.md` | Codex / Coagent / Reasonix decision chain |
+| Current status | `docs/coagent/00-executive-summary.md` | Implemented vs planned vs out-of-scope |
 | Active plan | `docs/implementation/review-diff-agent-collaboration-plan.md` | Current review_diff refactoring plan |
-| Architecture | `docs/coasonix/01-architecture/` | Roles, MCP communication, context architecture |
-| Runtime (implemented) | `docs/coasonix/02-runtime/` | Coagent internal safety gates |
-| Reasonix contract | `docs/coasonix/03-reasonix/` | Reasonix task input/output boundaries |
-| Design specs (post-v1) | `docs/coasonix/04-patch-and-verification/`, `05-versioning/` | Future gate designs |
-| Historical roadmap | `docs/coasonix/06-roadmap/` | Design evolution; not the current status |
+| Architecture | `docs/coagent/01-architecture/` | Roles, MCP communication, context architecture |
+| Runtime (implemented) | `docs/coagent/02-runtime/` | Coagent internal safety gates |
+| Reasonix contract | `docs/coagent/03-reasonix/` | Reasonix task input/output boundaries |
+| Design specs (post-v1) | `docs/coagent/04-patch-and-verification/`, `05-versioning/` | Future gate designs |
+| Historical roadmap | `docs/coagent/06-roadmap/` | Design evolution; not the current status |
 | Implementation history | `docs/implementation/v1-mvp-execution-plan.md` | Historical milestone reference |
 | Gap analysis | `docs/implementation/gaps-to-production.md` | From MVP to production |
 
@@ -131,3 +132,5 @@ bun test                      # TypeScript adapter: 82 pass, 1 skip, 0 fail
 python -m json.tool schemas/coagent-v1.schema.json > $null
 cargo fmt --all -- --check
 ```
+
+

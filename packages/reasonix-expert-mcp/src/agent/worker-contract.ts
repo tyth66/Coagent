@@ -78,7 +78,7 @@ export async function runAgentWorkerConformance(
     ? {
         name: "success",
         status: "pass",
-        message: "worker emitted one valid review_result_v1 JSON object",
+        message: "worker emitted one valid pure review result JSON object",
       }
     : {
         name: "success",
@@ -96,7 +96,7 @@ export async function runAgentWorkerConformance(
 }
 
 export function validateAgentWorkerReviewResult(
-  input: ReviewDiffContractInput,
+  _input: ReviewDiffContractInput,
   run: AgentWorkerRunResult,
 ): AgentWorkerValidationResult {
   if (run.timedOut) {
@@ -122,15 +122,33 @@ export function validateAgentWorkerReviewResult(
   }
 
   const output = parsed as Record<string, unknown>;
-  if (output.task_id !== input.task_id || output.request_id !== input.request_id) {
-    return invalid(ERROR_CODES.WORKER_IDENTITY_MISMATCH, "worker output task_id/request_id must match input");
-  }
 
-  const schemaError = reviewResultSchemaError(output);
-  if (schemaError) {
-    return invalid(ERROR_CODES.WORKER_SCHEMA_INVALID, schemaError);
+  // Validate pure review result fields only.
+  // Coagent owns identity; Reasonix does not return task_id/request_id.
+  if (
+    typeof output.verdict !== "string" ||
+    !["pass", "needs_fix", "risky", "unknown", "not_applicable"].includes(output.verdict)
+  ) {
+    return invalid(ERROR_CODES.WORKER_SCHEMA_INVALID, "verdict must be a valid result verdict");
   }
-
+  if (typeof output.summary !== "string" || !output.summary) {
+    return invalid(ERROR_CODES.WORKER_SCHEMA_INVALID, "summary must be a non-empty string");
+  }
+  if (!Array.isArray(output.findings)) {
+    return invalid(ERROR_CODES.WORKER_SCHEMA_INVALID, "findings must be an array");
+  }
+  if (!Array.isArray(output.tests_to_run)) {
+    return invalid(ERROR_CODES.WORKER_SCHEMA_INVALID, "tests_to_run must be an array");
+  }
+  if (!Array.isArray(output.risks)) {
+    return invalid(ERROR_CODES.WORKER_SCHEMA_INVALID, "risks must be an array");
+  }
+  if (!Array.isArray(output.assumptions)) {
+    return invalid(ERROR_CODES.WORKER_SCHEMA_INVALID, "assumptions must be an array");
+  }
+  if (typeof output.confidence !== "number" || output.confidence < 0 || output.confidence > 1) {
+    return invalid(ERROR_CODES.WORKER_SCHEMA_INVALID, "confidence must be a number between 0 and 1");
+  }
   return { ok: true, value: output };
 }
 
@@ -185,41 +203,6 @@ async function runAgentWorkerCommand(
   };
 }
 
-function reviewResultSchemaError(output: Record<string, unknown>): string | null {
-  if (output.schema_version !== "review_result_v1") {
-    return "schema_version must be review_result_v1";
-  }
-  if (
-    typeof output.status !== "string" ||
-    ![
-      "ok",
-      "partial",
-      "error",
-      "timeout",
-      "invalid_input",
-      "permission_denied",
-      "schema_validation_failed",
-      "reasonix_failed",
-      "artifact_not_found",
-    ].includes(output.status)
-  ) {
-    return "status must be a valid result status";
-  }
-  if (
-    typeof output.verdict !== "string" ||
-    !["pass", "needs_fix", "risky", "unknown", "not_applicable"].includes(output.verdict)
-  ) {
-    return "verdict must be a valid result verdict";
-  }
-  if (typeof output.summary !== "string" || !output.summary) {
-    return "summary must be a non-empty string";
-  }
-  if (typeof output.confidence !== "number" || output.confidence < 0 || output.confidence > 1) {
-    return "confidence must be a number between 0 and 1";
-  }
-  return null;
-}
-
 function contractInput(): ReviewDiffContractInput {
   return {
     schema_version: "review_diff_input_v1",
@@ -246,7 +229,7 @@ function defaultMockWorkerCommand(repoRoot: string): string[] {
   return [
     resolve(
       repoRoot,
-      process.platform === "win32" ? "bin/coasonix-mock-worker.cmd" : "bin/coasonix-mock-worker",
+      process.platform === "win32" ? "bin/coagent-mock-worker.cmd" : "bin/coagent-mock-worker",
     ),
     "review-diff",
   ];
@@ -313,4 +296,3 @@ Examples:
       process.exit(1);
     });
 }
-

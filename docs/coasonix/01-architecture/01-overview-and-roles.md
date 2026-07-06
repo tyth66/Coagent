@@ -105,11 +105,12 @@ Reasonix target output is review data only. Coagent wraps this in MCP
 `structuredContent` and attaches internal metadata in MCP `_meta` or audit
 records. The review payload itself stays pure.
 
-## Implementation Status
+## Implementation Status (updated 2026-07-06)
 
-The Rust runtime gate (state + policy engines, SQLite audit) and TypeScript
-MCP adapter are implemented with a mock review_diff vertical slice. The
-current review_result_v1 contract still carries transitional system-envelope
-fields. The active plan to move those to Coagent wrapper metadata is in
-[../../implementation/review-diff-agent-collaboration-plan.md](../../implementation/review-diff-agent-collaboration-plan.md).
+✅ Pure review result boundary: Reasonix backends return only semantic review
+data. Coagent adapter wraps with `{ review, metadata }` in MCP
+`structuredContent`. Identity check removed from adapter — Coagent owns
+all internal tracking fields (task_id, request_id, status, runtime_decision).
+Next target: Runtime lifecycle closure with `complete_operation` / `fail_operation`.
+
 

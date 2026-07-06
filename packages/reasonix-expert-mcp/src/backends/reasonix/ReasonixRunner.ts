@@ -38,7 +38,7 @@ export class ReasonixRunner implements AgentRunner {
   }
 }
 
-// ---- Prompt builder ----
+// ---- Prompt builder (pure review result, no system envelope fields) ----
 
 function buildReviewPromptText(input: ReviewDiffInput): string {
   const lines = [
@@ -70,10 +70,6 @@ function buildReviewPromptText(input: ReviewDiffInput): string {
     "",
     "Read the diff file, analyze it, then return your review as a single JSON object with this exact schema. Return ONLY the JSON, no other text:",
     "{",
-    '  "schema_version": "review_result_v1",',
-    `  "task_id": "${input.task_id ?? "TASK-unknown"}",`,
-    `  "request_id": "${input.request_id ?? "REQ-unknown"}",`,
-    '  "status": "ok",',
     '  "verdict": "pass" | "needs_fix" | "risky" | "unknown",',
     '  "summary": "one-sentence summary",',
     '  "findings": [{ "id": "...", "severity": "blocker"|"major"|"minor"|"note", "category": "...", "file": "...", "line": N, "issue": "...", "evidence": "...", "recommendation": "...", "confidence": 0.0-1.0 }],',

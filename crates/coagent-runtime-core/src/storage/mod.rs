@@ -528,6 +528,7 @@ fn task_state_to_str(value: TaskStateValue) -> &'static str {
         TaskStateValue::Running => "running",
         TaskStateValue::Completed => "completed",
         TaskStateValue::Failed => "failed",
+            TaskStateValue::Cancelled => "cancelled",
     }
 }
 
@@ -537,6 +538,7 @@ fn task_state_from_str(value: &str) -> Result<TaskStateValue, StoreError> {
         "running" => Ok(TaskStateValue::Running),
         "completed" => Ok(TaskStateValue::Completed),
         "failed" => Ok(TaskStateValue::Failed),
+        "cancelled" => Ok(TaskStateValue::Cancelled),
         _ => Err(StoreError::InvalidTaskState(value.to_string())),
     }
 }
@@ -659,3 +661,4 @@ const MIGRATIONS: &[(&str, &str)] = &[
         );",
     ),
 ];
+

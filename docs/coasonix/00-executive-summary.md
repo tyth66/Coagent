@@ -78,11 +78,13 @@ Worker contract conformance              implemented
 Backend profiles                         mock, conformance, reasonix-cli, mimocode-cli
 ```
 
-### Active Transition
+### Active Transition (updated 2026-07-06)
 
-The current `review_result_v1` contract still includes system envelope fields
-(`schema_version`, `task_id`, `request_id`, `status`) that belong in Coagent
-wrapper metadata, not in Reasonix review answer.
+✅ Pure review result boundary implemented:
+- Reasonix backends return only semantic review data (verdict, summary, findings, etc.)
+- Coagent `adapter.ts` wraps with `{ review, metadata }` in `structuredContent`
+- Identity check removed — Coagent owns task_id/request_id internally
+- Next: Runtime lifecycle closure (`complete_operation` / `fail_operation` API)
 
 ### Out of Scope
 
@@ -104,3 +106,4 @@ bun test                      # 82 pass, 1 skip, 0 fail
 python -m json.tool schemas/coagent-v1.schema.json > $null
 cargo fmt --all -- --check
 ```
+

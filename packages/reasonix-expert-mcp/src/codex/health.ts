@@ -159,7 +159,7 @@ async function checkGatewaySmoke(options: HealthOptions): Promise<HealthCheck[]>
       checks.push(classifyBackendFailure(result.result));
       return await finishServer(child, checks);
     }
-    if (result.result?.structuredContent?.schema_version !== "review_result_v1") {
+    if (result.result?.structuredContent?.metadata?.schema_version !== "review_result_v1") {
       checks.push(fail("mock_review_diff", ERROR_CODES.WORKER_SCHEMA_INVALID, "tools/call did not return review_result_v1"));
       return await finishServer(child, checks);
     }
@@ -464,6 +464,7 @@ Example:
       process.exit(1);
     });
 }
+
 
 
 

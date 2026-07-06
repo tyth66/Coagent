@@ -8,7 +8,7 @@ const repoRoot = resolve(import.meta.dir, "../../../..");
 const runtimeWorkerName =
   process.platform === "win32" ? "coagent-runtime-worker.exe" : "coagent-runtime-worker";
 const mockWorkerName =
-  process.platform === "win32" ? "coasonix-mock-worker.cmd" : "coasonix-mock-worker";
+  process.platform === "win32" ? "coagent-mock-worker.cmd" : "coagent-mock-worker";
 
 describe("Codex MCP setup", () => {
   test("builds a protocol-clean codex mcp add command with stable paths", () => {
@@ -212,10 +212,9 @@ describe("Codex MCP setup", () => {
     expect(exitCode).toBe(0);
     expect(stderr).toBe("");
     expect(JSON.parse(stdout)).toMatchObject({
-      schema_version: "review_result_v1",
-      task_id: "TASK-setup-worker",
-      request_id: "REQ-setup-worker",
-      status: "ok",
+      verdict: "pass",
+      summary: "Mock worker completed review.",
+      confidence: 0.9,
     });
   });
 
@@ -239,6 +238,8 @@ describe("Codex MCP setup", () => {
     expect(stdout).toContain("--profile");
   });
 });
+
+
 
 
 

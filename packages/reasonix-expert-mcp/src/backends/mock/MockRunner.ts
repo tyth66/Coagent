@@ -1,31 +1,23 @@
 import type { AgentRunner, AgentRunResult } from "../core/interfaces";
 
-// MockRunner validates the full review_result_v1 contract round-trip:
-// it echoes back the task_id and request_id so identity checks pass.
+// MockRunner returns a pure review result (no system envelope fields).
+// Coagent wrapper metadata (task_id, request_id, status) is attached by the adapter.
 
 export class MockRunner implements AgentRunner {
-  async runReviewDiff(input: {
-    task_id?: string;
-    request_id?: string;
-    [key: string]: unknown;
-  }): Promise<AgentRunResult> {
+  async runReviewDiff(_input: Record<string, unknown>): Promise<AgentRunResult> {
     const result = {
-      schema_version: "review_result_v1",
-      task_id: input.task_id ?? "TASK-mock",
-      request_id: input.request_id ?? "REQ-mock",
-      status: "ok",
       verdict: "pass" as const,
       summary: "Mock runner completed review.",
       findings: [] as Array<Record<string, unknown>>,
       tests_to_run: [] as string[],
       risks: [] as string[],
       assumptions: [] as string[],
-      confidence: 0.9,
+      confidence: 0.9
     };
     return {
       stdout: JSON.stringify(result),
       stderr: "",
-      exitCode: 0,
+      exitCode: 0
     };
   }
 

@@ -79,7 +79,13 @@ describe("reasonix-expert MCP stdio server", () => {
     });
 
     expect(result.result.isError).toBe(false);
-    expect(result.result.structuredContent).toMatchObject({
+    // structuredContent now wraps pure review in { review, metadata }
+    expect(result.result.structuredContent.review).toMatchObject({
+      verdict: "pass",
+      summary: "Mock runner completed review.",
+      confidence: 0.9,
+    });
+    expect(result.result.structuredContent.metadata).toMatchObject({
       schema_version: "review_result_v1",
       task_id: "TASK-server-success",
       request_id: "REQ-server-success",
@@ -116,7 +122,12 @@ describe("reasonix-expert MCP stdio server", () => {
       });
 
       expect(result.isError).toBe(false);
-      expect(result.structuredContent).toMatchObject({
+      expect(result.structuredContent.review).toMatchObject({
+        verdict: "pass",
+        summary: "Mock runner completed review.",
+        confidence: 0.9,
+      });
+      expect(result.structuredContent.metadata).toMatchObject({
         schema_version: "review_result_v1",
         task_id: "TASK-sdk-success",
         request_id: "REQ-sdk-success",
@@ -321,6 +332,7 @@ function reviewDiffInput(taskId: string, requestId: string, repo: string) {
   };
 }
 
+// Mock Reasonix now returns pure review result (no system envelope fields).
 function writeMockReasonix(mode: string, markerPath?: string): string {
   const dir = mkdtempSync(join(tmpdir(), "coagent-server-mock-reasonix-"));
   const script = join(dir, "mock-reasonix.mjs");
@@ -329,7 +341,7 @@ function writeMockReasonix(mode: string, markerPath?: string): string {
     `
       import { mkdirSync, writeFileSync } from "node:fs";
       import { dirname } from "node:path";
-      import { stdin, stdout, stderr } from "node:process";
+      import { stdout, stderr } from "node:process";
 
       const mode = ${JSON.stringify(mode)};
       const markerPath = ${JSON.stringify(markerPath ?? null)};
@@ -337,14 +349,14 @@ function writeMockReasonix(mode: string, markerPath?: string): string {
         mkdirSync(dirname(markerPath), { recursive: true });
         writeFileSync(markerPath, "invoked");
       }
-      const input = JSON.parse(await new Response(stdin).text());
+      // Pure review result — no schema_version, task_id, request_id, or status.
       const result = {
-        schema_version: "review_result_v1",
-        task_id: input.task_id,
-        request_id: input.request_id,
-        status: "ok",
         verdict: "pass",
-        summary: "No findings.",
+        summary: "Mock runner completed review.",
+        findings: [],
+        tests_to_run: [],
+        risks: [],
+        assumptions: [],
         confidence: 0.9
       };
 
@@ -367,7 +379,4 @@ function writeMockReasonix(mode: string, markerPath?: string): string {
   writeFileSync(command, `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`);
   return command;
 }
-
-
-
 

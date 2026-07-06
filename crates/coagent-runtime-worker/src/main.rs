@@ -6,6 +6,7 @@ use std::{
 use coagent_runtime_core::{
     kernel::{AuditEvent, RuntimeConfig, RuntimeKernel},
     policy::{PermissionLevel, ResourceSet, RuntimeOperationRequest},
+    state::TaskStateValue,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -62,6 +63,28 @@ struct WriteAuditParams {
     event_type: String,
     summary: String,
     payload_json: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CompleteOperationParams {
+    task_id: String,
+    #[serde(default)]
+    request_id: Option<String>,
+    #[serde(default)]
+    operation: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FailOperationParams {
+    task_id: String,
+    #[serde(default)]
+    request_id: Option<String>,
+    #[serde(default)]
+    operation: String,
+    #[serde(default)]
+    error_code: String,
+    #[serde(default)]
+    error_message: String,
 }
 
 #[derive(Debug, Clone)]
@@ -124,6 +147,8 @@ impl Worker {
             "runtime.initialize" => self.initialize(params),
             "runtime.evaluate_operation" => self.evaluate_operation(params, id),
             "runtime.write_audit" => self.write_audit(params),
+            "runtime.complete_operation" => self.complete_operation(params),
+            "runtime.fail_operation" => self.fail_operation(params),
             "runtime.shutdown" => Ok(json!({ "shutdown": true })),
             _ => Err(method_not_found()),
         }
@@ -176,6 +201,53 @@ impl Worker {
             "id": record.id,
             "task_sequence": record.task_sequence
         }))
+    }
+
+    fn complete_operation(&mut self, params: Value) -> Result<Value, JsonRpcError> {
+        let params: CompleteOperationParams =
+            serde_json::from_value(params).map_err(|_| invalid_params())?;
+        let kernel = self.kernel.as_mut().ok_or_else(runtime_unavailable)?;
+        let new_state = kernel
+            .complete_operation(
+                &params.task_id,
+                params.request_id.as_deref(),
+                &params.operation,
+            )
+            .map_err(|_| runtime_unavailable())?;
+        Ok(json!({
+            "task_id": params.task_id,
+            "state": task_state_value_to_str(new_state)
+        }))
+    }
+
+    fn fail_operation(&mut self, params: Value) -> Result<Value, JsonRpcError> {
+        let params: FailOperationParams =
+            serde_json::from_value(params).map_err(|_| invalid_params())?;
+        let kernel = self.kernel.as_mut().ok_or_else(runtime_unavailable)?;
+        let new_state = kernel
+            .fail_operation(
+                &params.task_id,
+                params.request_id.as_deref(),
+                &params.operation,
+                &params.error_code,
+                &params.error_message,
+            )
+            .map_err(|_| runtime_unavailable())?;
+        Ok(json!({
+            "task_id": params.task_id,
+            "state": task_state_value_to_str(new_state),
+            "error_code": params.error_code
+        }))
+    }
+}
+
+fn task_state_value_to_str(value: TaskStateValue) -> &'static str {
+    match value {
+        TaskStateValue::Created => "created",
+        TaskStateValue::Running => "running",
+        TaskStateValue::Completed => "completed",
+        TaskStateValue::Failed => "failed",
+        TaskStateValue::Cancelled => "cancelled",
     }
 }
 

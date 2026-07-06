@@ -1,8 +1,8 @@
 // Standalone mock Reasonix worker for conformance testing.
 // Reads a review_diff_input_v1 JSON object from stdin and writes a
-// valid review_result_v1 JSON object to stdout.
+// pure review result JSON object to stdout (no system envelope fields).
 //
-// Used by bin/coasonix-mock-worker.cmd and by worker-contract conformance tests.
+// Used by bin/coagent-mock-worker.cmd and by worker-contract conformance tests.
 
 const decoder = new TextDecoder();
 const chunks: Uint8Array[] = [];
@@ -13,19 +13,16 @@ for await (const chunk of Bun.stdin.stream() as AsyncIterable<Uint8Array>) {
 
 const raw = decoder.decode(Bun.concatArrayBuffers(chunks as unknown as ArrayBuffer[])).trim();
 
-let input: Record<string, unknown>;
+let _input: Record<string, unknown>;
 try {
-  input = JSON.parse(raw);
+  _input = JSON.parse(raw);
 } catch {
   process.stderr.write("mock worker: invalid JSON on stdin\n");
   process.exit(1);
 }
 
+// Pure review result — Coagent attaches wrapper metadata separately.
 const output = {
-  schema_version: "review_result_v1",
-  task_id: input.task_id ?? "TASK-mock",
-  request_id: input.request_id ?? "REQ-mock",
-  status: "ok",
   verdict: "pass",
   summary: "Mock worker completed review.",
   findings: [] as Array<Record<string, unknown>>,

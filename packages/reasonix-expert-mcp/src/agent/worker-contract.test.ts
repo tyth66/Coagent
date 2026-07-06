@@ -24,7 +24,7 @@ describe("Agent Worker Contract", () => {
     const command = [
       resolve(
         repoRoot,
-        process.platform === "win32" ? "bin/coasonix-mock-worker.cmd" : "bin/coasonix-mock-worker",
+        process.platform === "win32" ? "bin/coagent-mock-worker.cmd" : "bin/coagent-mock-worker",
       ),
       "review-diff",
     ];
@@ -36,7 +36,7 @@ describe("Agent Worker Contract", () => {
       {
         name: "success",
         status: "pass",
-        message: "worker emitted one valid review_result_v1 JSON object",
+        message: "worker emitted one valid pure review result JSON object",
       },
     ]);
   });
@@ -107,19 +107,14 @@ function invalidCases(): Array<[string, AgentWorkerRunResult, string]> {
       "worker_malformed_json",
     ],
     [
-      "schema mismatch",
-      { stdout: JSON.stringify({ ...validOutput(), schema_version: "other_schema" }), stderr: "", exitCode: 0 },
+      "invalid verdict",
+      { stdout: JSON.stringify({ ...validOutput(), verdict: "invalid" }), stderr: "", exitCode: 0 },
       "worker_schema_invalid",
     ],
     [
-      "wrong task_id",
-      { stdout: JSON.stringify({ ...validOutput(), task_id: "TASK-wrong" }), stderr: "", exitCode: 0 },
-      "worker_identity_mismatch",
-    ],
-    [
-      "wrong request_id",
-      { stdout: JSON.stringify({ ...validOutput(), request_id: "REQ-wrong" }), stderr: "", exitCode: 0 },
-      "worker_identity_mismatch",
+      "missing summary",
+      { stdout: JSON.stringify({ ...validOutput(), summary: "" }), stderr: "", exitCode: 0 },
+      "worker_schema_invalid",
     ],
     [
       "nonzero exit",
@@ -129,6 +124,11 @@ function invalidCases(): Array<[string, AgentWorkerRunResult, string]> {
     [
       "invalid confidence",
       { stdout: JSON.stringify({ ...validOutput(), confidence: 2 }), stderr: "", exitCode: 0 },
+      "worker_schema_invalid",
+    ],
+    [
+      "findings not array",
+      { stdout: JSON.stringify({ ...validOutput(), findings: "not-array" }), stderr: "", exitCode: 0 },
       "worker_schema_invalid",
     ],
   ];
@@ -148,17 +148,15 @@ function validInput(): ReviewDiffContractInput {
   };
 }
 
+// Pure review result — no system envelope fields.
 function validOutput() {
   return {
-    schema_version: "review_result_v1",
-    task_id: "TASK-agent-contract",
-    request_id: "REQ-agent-contract",
-    status: "ok",
     verdict: "pass",
     summary: "No findings.",
+    findings: [],
+    tests_to_run: [],
+    risks: [],
+    assumptions: [],
     confidence: 0.9,
   };
 }
-
-
-

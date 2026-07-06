@@ -1,5 +1,3 @@
-
-
 import {
   EXTERNAL_REVIEW_DIFF_TOOL_NAME,
   RUNTIME_REVIEW_DIFF_OPERATION,
@@ -88,6 +86,28 @@ export interface ReviewDiffInput {
   output_schema: "review_result_v1";
 }
 
+// ── Pure review result (what Reasonix returns) ──
+
+export interface PureReviewResult {
+  verdict: "pass" | "needs_fix" | "risky" | "unknown" | "not_applicable";
+  summary: string;
+  findings: Array<{
+    id?: string;
+    severity: "blocker" | "major" | "minor" | "note";
+    category: string;
+    file?: string;
+    line?: number;
+    issue: string;
+    evidence?: string;
+    recommendation?: string;
+    confidence: number;
+  }>;
+  tests_to_run: string[];
+  risks: string[];
+  assumptions: string[];
+  confidence: number;
+}
+
 // ── Tool handler ──
 
 export const reviewDiffHandler: ToolHandler = {
@@ -148,18 +168,27 @@ export const reviewDiffHandler: ToolHandler = {
     return runner.runReviewDiff(input);
   },
 
+  // validateOutput checks ONLY the pure review result fields.
+  // System envelope fields (schema_version, task_id, request_id, status)
+  // are now handled by the Coagent adapter wrapper, not by Reasonix.
   validateOutput(value: Record<string, unknown>): { path: string; message: string } | null {
-    if (value.schema_version !== "review_result_v1") {
-      return { path: "/schema_version", message: "schema_version must be review_result_v1" };
-    }
-    if (typeof value.status !== "string" || !["ok", "partial", "error", "timeout"].includes(value.status)) {
-      return { path: "/status", message: "status must be a valid review_result_v1 status" };
-    }
     if (typeof value.verdict !== "string" || !["pass", "needs_fix", "risky", "unknown", "not_applicable"].includes(value.verdict)) {
-      return { path: "/verdict", message: "verdict must be a valid review_result_v1 verdict" };
+      return { path: "/verdict", message: "verdict must be a valid review verdict" };
     }
     if (typeof value.summary !== "string") {
       return { path: "/summary", message: "summary must be a string" };
+    }
+    if (!Array.isArray(value.findings)) {
+      return { path: "/findings", message: "findings must be an array" };
+    }
+    if (!Array.isArray(value.tests_to_run)) {
+      return { path: "/tests_to_run", message: "tests_to_run must be an array" };
+    }
+    if (!Array.isArray(value.risks)) {
+      return { path: "/risks", message: "risks must be an array" };
+    }
+    if (!Array.isArray(value.assumptions)) {
+      return { path: "/assumptions", message: "assumptions must be an array" };
     }
     if (typeof value.confidence !== "number" || value.confidence < 0 || value.confidence > 1) {
       return { path: "/confidence", message: "confidence must be a number between 0 and 1" };
@@ -167,4 +196,3 @@ export const reviewDiffHandler: ToolHandler = {
     return null;
   },
 };
-

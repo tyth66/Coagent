@@ -61,7 +61,7 @@ function mockWorkerCommand(repoRoot: string): string[] {
   return [
     resolve(
       repoRoot,
-      process.platform === "win32" ? "bin/coasonix-mock-worker.cmd" : "bin/coasonix-mock-worker",
+      process.platform === "win32" ? "bin/coagent-mock-worker.cmd" : "bin/coagent-mock-worker",
     ),
     "review-diff",
   ];
@@ -97,6 +97,7 @@ function timeoutMs(value: string | undefined): number {
   }
   return parsed;
 }
+
 
 
 

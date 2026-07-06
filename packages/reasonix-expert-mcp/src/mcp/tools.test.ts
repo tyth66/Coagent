@@ -67,10 +67,10 @@ describe("tools/call reasonix.review_diff", () => {
         },
       },
       agent: {
-        async runReviewDiff(input) {
+        async runReviewDiff(_input) {
           events.push("reasonix");
           return {
-            stdout: JSON.stringify(reviewResult(input.task_id, input.request_id)),
+            stdout: JSON.stringify(pureReviewResult()),
             stderr: "",
             exitCode: 0,
           };
@@ -84,8 +84,10 @@ describe("tools/call reasonix.review_diff", () => {
     });
 
     expect(result.isError).toBe(false);
-    expect(result.structuredContent?.schema_version).toBe("review_result_v1");
-    expect(events).toEqual(["runtime:runtime.evaluate_operation", "reasonix"]);
+    // structuredContent now has { review, metadata } wrapper
+    expect(result.structuredContent?.review).toMatchObject(pureReviewResult());
+    expect(result.structuredContent?.metadata?.schema_version).toBe("review_result_v1");
+    expect(events).toEqual(["runtime:runtime.evaluate_operation", "reasonix", "runtime:runtime.complete_operation"]);
   });
 
   test("denied runtime decision prevents Reasonix invocation", async () => {
@@ -191,9 +193,9 @@ describe("tools/call reasonix.review_diff", () => {
         },
       },
       agent: {
-        async runReviewDiff(input) {
+        async runReviewDiff() {
           return {
-            stdout: JSON.stringify(reviewResult(input.task_id, input.request_id)),
+            stdout: JSON.stringify(pureReviewResult()),
             stderr: "diagnostic line",
             exitCode: 0,
           };
@@ -207,7 +209,15 @@ describe("tools/call reasonix.review_diff", () => {
     });
 
     expect(result.isError).toBe(false);
-    expect(result.structuredContent).toEqual(reviewResult("TASK-valid", "REQ-valid"));
+    expect(result.structuredContent?.review).toEqual(pureReviewResult());
+    expect(result.structuredContent?.metadata).toMatchObject({
+      schema_version: "review_result_v1",
+      task_id: "TASK-valid",
+      request_id: "REQ-valid",
+      status: "ok",
+      operation: "reasonix.review_diff",
+      runtime_decision: "allow",
+    });
     expect(JSON.stringify(result.structuredContent)).not.toContain("diagnostic line");
     expect(result._meta?.diagnostics).toEqual({ stderr: "diagnostic line" });
     expect(result._meta?.code).toBeUndefined();
@@ -451,7 +461,10 @@ describe("tools/call reasonix.review_diff", () => {
     expect(result._meta?.layer).toBe(errorLayerForCode(ERROR_CODES.WORKER_EMPTY_STDOUT));
   });
 
-  test("identity mismatch returns worker_identity_mismatch", async () => {
+  // identity mismatch is no longer a separate error path — Coagent owns identity,
+  // so mismatched task_id/request_id from Reasonix is irrelevant.
+  // The adapter now validates only the pure review fields.
+  test("identity fields from backend are ignored (no identity mismatch check)", async () => {
     const adapter = createReasonixToolsAdapter({
       initialized: true,
       runtime: {
@@ -465,7 +478,7 @@ describe("tools/call reasonix.review_diff", () => {
       agent: {
         async runReviewDiff() {
           return {
-            stdout: JSON.stringify(reviewResult("TASK-wrong", "REQ-wrong")),
+            stdout: JSON.stringify({ ...pureReviewResult(), verdict: "needs_fix", summary: "Fix needed." }),
             stderr: "",
             exitCode: 0,
           };
@@ -478,10 +491,12 @@ describe("tools/call reasonix.review_diff", () => {
       arguments: reviewDiffInput("TASK-id", "REQ-id"),
     });
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("worker_identity_mismatch");
-    expect(result._meta?.code).toBe(ERROR_CODES.WORKER_IDENTITY_MISMATCH);
-    expect(result._meta?.layer).toBe(errorLayerForCode(ERROR_CODES.WORKER_IDENTITY_MISMATCH));
+    // Should succeed even if backend returns no identity fields.
+    // Coagent wraps with its own task_id/request_id.
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent?.review?.verdict).toBe("needs_fix");
+    expect(result.structuredContent?.metadata?.task_id).toBe("TASK-id");
+    expect(result.structuredContent?.metadata?.request_id).toBe("REQ-id");
   });
 
   test("schema validation failure returns worker_schema_invalid", async () => {
@@ -496,10 +511,10 @@ describe("tools/call reasonix.review_diff", () => {
         },
       },
       agent: {
-        async runReviewDiff(input) {
+        async runReviewDiff() {
           return {
             stdout: JSON.stringify({
-              ...reviewResult(input.task_id, input.request_id),
+              ...pureReviewResult(),
               confidence: 2,
             }),
             stderr: "",
@@ -518,9 +533,7 @@ describe("tools/call reasonix.review_diff", () => {
     expect(result.content[0].text).toContain("worker_schema_invalid");
     expect(result._meta?.code).toBe(ERROR_CODES.WORKER_SCHEMA_INVALID);
     expect(result._meta?.layer).toBe(errorLayerForCode(ERROR_CODES.WORKER_SCHEMA_INVALID));
-    expect(result._meta?.diagnostics).toMatchObject({
-      schema_errors: [{ path: "/confidence" }],
-    });
+    expect(result._meta?.diagnostics?.schema_errors?.[0].path).toBe("/confidence");
   });
 });
 
@@ -561,6 +574,21 @@ function validSchema(taskId: string, requestId: string) {
   };
 }
 
+// Pure review result — no system envelope fields.
+// Reasonix returns only semantic review data.
+function pureReviewResult() {
+  return {
+    verdict: "pass",
+    summary: "No findings.",
+    findings: [],
+    tests_to_run: [],
+    risks: [],
+    assumptions: [],
+    confidence: 0.9,
+  };
+}
+
+// Legacy helper kept for reference — no longer used in new tests.
 function reviewResult(taskId: string, requestId: string) {
   return {
     schema_version: "review_result_v1",
@@ -569,6 +597,10 @@ function reviewResult(taskId: string, requestId: string) {
     status: "ok",
     verdict: "pass",
     summary: "No findings.",
+    findings: [],
+    tests_to_run: [],
+    risks: [],
+    assumptions: [],
     confidence: 0.9,
   };
 }

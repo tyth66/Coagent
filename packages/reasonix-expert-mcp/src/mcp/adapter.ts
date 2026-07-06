@@ -22,6 +22,20 @@ interface RuntimeDecisionPayload {
   reasons: string[];
 }
 
+// ── Coagent wrapper metadata (attached by adapter, never by Reasonix) ──
+
+interface CoagentReviewResult {
+  review: Record<string, unknown>;
+  metadata: {
+    schema_version: "review_result_v1";
+    task_id: string;
+    request_id: string;
+    status: "ok" | "partial" | "error";
+    operation: string;
+    runtime_decision: string;
+  };
+}
+
 // ── Tool registry ──
 
 const toolRegistry = new Map<string, ToolHandler>();
@@ -70,6 +84,10 @@ export function createReasonixToolsAdapter(options: AgentToolsAdapterOptions) {
         });
       }
 
+      const inputValue = input.value as Record<string, unknown>;
+      const taskId = String(inputValue.task_id ?? "");
+      const requestId = String(inputValue.request_id ?? "");
+
       let decision: RuntimeDecisionPayload;
       try {
         decision = asRuntimeDecision(
@@ -98,6 +116,13 @@ export function createReasonixToolsAdapter(options: AgentToolsAdapterOptions) {
       try {
         run = await handler.invokeAgent(options.agent, input.value);
       } catch (error) {
+        void options.runtime.call("runtime.fail_operation", {
+          task_id: taskId,
+          request_id: requestId,
+          operation: request.name,
+          error_code: ERROR_CODES.WORKER_UNAVAILABLE,
+          error_message: error instanceof Error ? error.message : "Agent backend failed",
+        }).catch(() => {});
         return errorToolResult(
           ERROR_CODES.WORKER_UNAVAILABLE,
           error instanceof Error ? error.message : "Agent backend failed",
@@ -105,11 +130,25 @@ export function createReasonixToolsAdapter(options: AgentToolsAdapterOptions) {
         );
       }
       if (run.timedOut) {
+        void options.runtime.call("runtime.fail_operation", {
+          task_id: taskId,
+          request_id: requestId,
+          operation: request.name,
+          error_code: ERROR_CODES.WORKER_TIMEOUT,
+          error_message: "Agent backend timed out",
+        }).catch(() => {});
         return errorToolResult(ERROR_CODES.WORKER_TIMEOUT, "Agent backend timed out", {
           diagnostics: { stderr: run.stderr },
         });
       }
       if (run.exitCode !== 0) {
+        void options.runtime.call("runtime.fail_operation", {
+          task_id: taskId,
+          request_id: requestId,
+          operation: request.name,
+          error_code: ERROR_CODES.WORKER_NONZERO_EXIT,
+          error_message: `Reasonix exited with ${run.exitCode}`,
+        }).catch(() => {});
         return errorToolResult(
           ERROR_CODES.WORKER_NONZERO_EXIT,
           `Reasonix exited with ${run.exitCode}`,
@@ -122,23 +161,30 @@ export function createReasonixToolsAdapter(options: AgentToolsAdapterOptions) {
         const parseCode = parsed.error.includes("empty")
           ? ERROR_CODES.WORKER_EMPTY_STDOUT
           : ERROR_CODES.WORKER_MALFORMED_JSON;
+        void options.runtime.call("runtime.fail_operation", {
+          task_id: taskId,
+          request_id: requestId,
+          operation: request.name,
+          error_code: parseCode,
+          error_message: parsed.error,
+        }).catch(() => {});
         return errorToolResult(parseCode, parsed.error, {
           diagnostics: { stderr: run.stderr },
         });
       }
 
-      const parsedValue = parsed.value as Record<string, unknown>;
-      const inputValue = input.value as Record<string, unknown>;
-      if (parsedValue.task_id !== inputValue.task_id || parsedValue.request_id !== inputValue.request_id) {
-        return errorToolResult(
-          ERROR_CODES.WORKER_IDENTITY_MISMATCH,
-          "Agent output task_id/request_id did not match request",
-          { diagnostics: { stderr: run.stderr } },
-        );
-      }
-
-      const validationError = handler.validateOutput(parsed.value);
+      // Pure review result validation — no identity check.
+      // Coagent owns task_id/request_id internally; Reasonix never returns them.
+      const pureReview = parsed.value as Record<string, unknown>;
+      const validationError = handler.validateOutput(pureReview);
       if (validationError) {
+        void options.runtime.call("runtime.fail_operation", {
+          task_id: taskId,
+          request_id: requestId,
+          operation: request.name,
+          error_code: ERROR_CODES.WORKER_SCHEMA_INVALID,
+          error_message: `Agent output failed contract validation: ${validationError.message}`,
+        }).catch(() => {});
         return errorToolResult(
           ERROR_CODES.WORKER_SCHEMA_INVALID,
           "Agent output failed contract validation",
@@ -146,10 +192,34 @@ export function createReasonixToolsAdapter(options: AgentToolsAdapterOptions) {
         );
       }
 
+      // Close the task lifecycle: notify Runtime of completion.
+      try {
+        await options.runtime.call("runtime.complete_operation", {
+          task_id: taskId,
+          request_id: requestId,
+          operation: request.name,
+        });
+      } catch {
+        // Best-effort: task lifecycle closure failure does not block the review result.
+      }
+
+      // Wrap pure review into Coagent-structured result.
+      const wrapped: CoagentReviewResult = {
+        review: pureReview,
+        metadata: {
+          schema_version: "review_result_v1",
+          task_id: taskId,
+          request_id: requestId,
+          status: "ok",
+          operation: request.name,
+          runtime_decision: decision.decision,
+        },
+      };
+
       return {
         isError: false,
-        content: [{ type: "text", text: String(parsedValue.summary ?? "Agent review completed.") }],
-        structuredContent: parsed.value,
+        content: [{ type: "text", text: String(pureReview.summary ?? "Agent review completed.") }],
+        structuredContent: wrapped,
         _meta: diagnosticsMeta(run.stderr),
       };
     },

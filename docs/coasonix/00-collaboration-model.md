@@ -161,3 +161,4 @@ bun test                      # TypeScript adapter (70 pass, 13 fail: env/missin
 python -m json.tool schemas/coagent-v1.schema.json > $null
 cargo fmt --all -- --check
 ```
+

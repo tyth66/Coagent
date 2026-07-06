@@ -129,6 +129,70 @@ impl RuntimeKernel {
         })?)
     }
 
+
+    /// Transition task to Completed and write audit.
+    pub fn complete_operation(
+        &mut self,
+        task_id: &str,
+        request_id: Option<&str>,
+        operation: &str,
+    ) -> Result<TaskStateValue, RuntimeError> {
+        let mut state = self.load_or_create_task_state(task_id);
+        state
+            .transition_to(TaskStateValue::Completed)
+            .map_err(|e| RuntimeError::Store(StoreError::InvalidTaskState(format!("{e:?}"))))?;
+
+        let audit = AuditEventInput {
+            task_id: task_id.to_string(),
+            event_type: "task_completed".to_string(),
+            summary: format!("Task {task_id} completed for {operation}"),
+            payload_json: json!({
+                "task_id": task_id,
+                "request_id": request_id,
+                "operation": operation
+            })
+            .to_string(),
+        };
+        self.store.transition_state_with_audit(task_id, TaskStateValue::Completed, &audit)?;
+        Ok(TaskStateValue::Completed)
+    }
+
+    /// Transition task to Failed, write audit with error info.
+    pub fn fail_operation(
+        &mut self,
+        task_id: &str,
+        request_id: Option<&str>,
+        operation: &str,
+        error_code: &str,
+        error_message: &str,
+    ) -> Result<TaskStateValue, RuntimeError> {
+        let mut state = self.load_or_create_task_state(task_id);
+        state
+            .transition_to(TaskStateValue::Failed)
+            .map_err(|e| RuntimeError::Store(StoreError::InvalidTaskState(format!("{e:?}"))))?;
+
+        let audit = AuditEventInput {
+            task_id: task_id.to_string(),
+            event_type: "task_failed".to_string(),
+            summary: format!("Task {task_id} failed ({error_code}): {error_message}"),
+            payload_json: json!({
+                "task_id": task_id,
+                "request_id": request_id,
+                "operation": operation,
+                "error_code": error_code,
+                "error_message": error_message
+            })
+            .to_string(),
+        };
+        self.store.transition_state_with_audit(task_id, TaskStateValue::Failed, &audit)?;
+        Ok(TaskStateValue::Failed)
+    }
+
+    fn load_or_create_task_state(&self, task_id: &str) -> TaskState {
+        self.store
+            .load_task_state(task_id)
+            .unwrap_or_else(|_| TaskState::new(task_id))
+    }
     pub fn merge_decisions(results: EngineResults) -> RuntimeDecisionValue {
         if results.policy == RuntimeDecisionValue::Deny {
             return RuntimeDecisionValue::Deny;
@@ -153,7 +217,7 @@ impl RuntimeKernel {
             Ok(state)
                 if matches!(
                     state.value(),
-                    TaskStateValue::Completed | TaskStateValue::Failed
+                    TaskStateValue::Completed | TaskStateValue::Failed | TaskStateValue::Cancelled
                 ) =>
             {
                 (
@@ -256,3 +320,4 @@ fn runtime_decision_to_str(value: RuntimeDecisionValue) -> &'static str {
         RuntimeDecisionValue::FatalError => "fatal_error",
     }
 }
+

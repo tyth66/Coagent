@@ -4,11 +4,12 @@ pub enum TaskStateValue {
     Running,
     Completed,
     Failed,
+    Cancelled,
 }
 
 impl TaskStateValue {
     fn is_terminal(self) -> bool {
-        matches!(self, Self::Completed | Self::Failed)
+        matches!(self, Self::Completed | Self::Failed | Self::Cancelled)
     }
 }
 
@@ -92,5 +93,7 @@ fn is_legal_transition(current: TaskStateValue, next: TaskStateValue) -> bool {
         (TaskStateValue::Created, TaskStateValue::Running)
             | (TaskStateValue::Running, TaskStateValue::Completed)
             | (TaskStateValue::Running, TaskStateValue::Failed)
+            | (TaskStateValue::Created, TaskStateValue::Cancelled)
+            | (TaskStateValue::Running, TaskStateValue::Cancelled)
     )
 }

@@ -89,10 +89,11 @@ Reasonix review contract invalid          -> Coagent returns an MCP error
 In all failure cases, Codex receives an error classification. It does not receive
 worker stdout/stderr as trusted review content.
 
-## Current Implementation Note
+## Current Implementation Note (updated 2026-07-06)
 
-The live implementation still uses a transitional backend payload that includes
-system-envelope fields in the review result. The active plan to move these to
-Coagent wrapper metadata is in
-[../../implementation/review-diff-agent-collaboration-plan.md](../../implementation/review-diff-agent-collaboration-plan.md).
+✅ The pure review result boundary is now live. Reasonix backends return only
+semantic review fields. Coagent wraps them with `{ review, metadata }` in
+MCP `structuredContent`. Identity check is removed — Coagent owns all
+internal tracking fields internally.
+
 

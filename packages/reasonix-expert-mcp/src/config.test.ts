@@ -8,7 +8,7 @@ describe("loadServerConfig", () => {
       COAGENT_REPO_ROOT: "D:\\work\\target-repo",
       COAGENT_RUNTIME_WORKER: "D:\\Coagent\\target\\debug\\coagent-runtime-worker.exe",
       COAGENT_AGENT_COMMAND_JSON: JSON.stringify([
-        "D:\\Coagent\\bin\\coasonix-mock-worker.cmd",
+        "D:\\Coagent\\bin\\coagent-mock-worker.cmd",
         "review-diff",
       ]),
     });
@@ -18,6 +18,7 @@ describe("loadServerConfig", () => {
     expect(config.agentCommand[1]).toBe("review-diff");
   });
 });
+
 
 
 
