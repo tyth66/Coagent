@@ -6,18 +6,12 @@
     "packages/reasonix-expert-mcp"
   ],
   "scripts": {
-    "build": "cd packages/reasonix-expert-mcp && npx tsc && bun scripts/postbuild.ts",
-    "typecheck": "bun run --cwd=packages/reasonix-expert-mcp typecheck",
     "conformance:agent-worker": "bun packages/reasonix-expert-mcp/src/agent/worker-contract.ts",
     "health:codex-mcp": "bun packages/reasonix-expert-mcp/src/codex/health.ts",
     "setup:codex-mcp": "bun packages/reasonix-expert-mcp/src/codex/setup.ts",
-    "start:mcp": "bun run --cwd=packages/reasonix-expert-mcp start:mcp",
-    "start:mcp-node": "node packages/reasonix-expert-mcp/dist/index.js",
     "test": "bun test"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
     "typescript": "^5.9.0"
   }
 }
-
