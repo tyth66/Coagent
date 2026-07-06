@@ -163,7 +163,7 @@ impl rmcp::handler::server::ServerHandler for CoagentServer {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
-    let backend = Backend::from_config(config.backend, &config.reasonix_model);
+    let backend = Backend::from_config(config.backend, &config.reasonix_model, &config.repo_root);
 
     let kernel = RuntimeKernel::initialize(RuntimeConfig {
         repo_root: config.repo_root.clone(),
@@ -180,6 +180,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
 
 
 

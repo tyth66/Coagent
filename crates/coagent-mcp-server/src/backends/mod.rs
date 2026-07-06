@@ -12,12 +12,12 @@ pub enum Backend {
 }
 
 impl Backend {
-    pub fn from_config(backend_id: BackendId, reasonix_model: &str) -> Self {
+    pub fn from_config(backend_id: BackendId, reasonix_model: &str, repo_root: &PathBuf) -> Self {
         match backend_id {
             BackendId::Mock => Self::Mock,
             BackendId::Reasonix => Self::Reasonix(reasonix::ReasonixRunner::new(
                 reasonix_model,
-                PathBuf::from("."),
+                repo_root.clone(),
             )),
         }
     }
