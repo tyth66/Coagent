@@ -32,9 +32,11 @@ export class ConfigError extends Error {
 export function loadServerConfig(env: Environment = process.env): ServerConfig {
   const missing = ["COAGENT_REPO_ROOT", "COAGENT_RUNTIME_WORKER"].filter((key) => !env[key]);
 
+  const backend = normalizeBackend(env.COAGENT_BACKEND);
+
   const agentCmdJson = env.COAGENT_AGENT_COMMAND_JSON;
   const agentCmd = env.COAGENT_AGENT_COMMAND;
-  if (!agentCmdJson && !agentCmd) {
+  if (backend !== "reasonix" && !agentCmdJson && !agentCmd) {
     missing.push("COAGENT_AGENT_COMMAND_JSON or COAGENT_AGENT_COMMAND");
   }
 
@@ -42,7 +44,6 @@ export function loadServerConfig(env: Environment = process.env): ServerConfig {
     throw new ConfigError(`Missing required configuration: ${missing.join(", ")}`);
   }
 
-  const backend = normalizeBackend(env.COAGENT_BACKEND);
   if (backend === "reasonix" && !env.COAGENT_REASONIX_MODEL) {
     throw new ConfigError("COAGENT_REASONIX_MODEL is required when COAGENT_BACKEND=reasonix");
   }
@@ -50,7 +51,9 @@ export function loadServerConfig(env: Environment = process.env): ServerConfig {
   return {
     repoRoot: resolve(required(env.COAGENT_REPO_ROOT, "COAGENT_REPO_ROOT")),
     runtimeWorker: resolve(required(env.COAGENT_RUNTIME_WORKER, "COAGENT_RUNTIME_WORKER")),
-    agentCommand: parseAgentCommand(agentCmdJson, agentCmd),
+    agentCommand: backend === "reasonix"
+      ? ["reasonix", "acp", "--model", env.COAGENT_REASONIX_MODEL ?? "deepseek-v4-flash"]
+      : parseAgentCommand(agentCmdJson, agentCmd),
     runtimeRequestTimeoutMs: parsePositiveInteger(
       env.COAGENT_RUNTIME_REQUEST_TIMEOUT_MS,
       2_000,

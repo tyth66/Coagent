@@ -1,6 +1,7 @@
 import { ACPSessionPool } from "../acp/ACPSessionPool";
 import type { AgentRunner, AgentRunResult } from "../core/interfaces";
 import type { ReviewDiffInput } from "../../mcp/tools/review-diff";
+import { which } from "bun";
 
 // ---- Options ----
 
@@ -16,8 +17,11 @@ export class ReasonixRunner implements AgentRunner {
   private pool: ACPSessionPool;
 
   constructor(options: ReasonixRunnerOptions) {
+    const reasonixPath = process.platform === "win32"
+      ? (which("reasonix.cmd") ?? which("reasonix") ?? "reasonix")
+      : (which("reasonix") ?? "reasonix");
     this.pool = new ACPSessionPool({
-      command: ["reasonix", "acp", "--model", options.model],
+      command: [reasonixPath, "acp", "--model", options.model],
       cwd: options.cwd,
       requestTimeoutMs: options.requestTimeoutMs,
     });

@@ -85,7 +85,7 @@ export class ACPClient {
         stdout: "pipe",
         stderr: "pipe",
         cwd: this.cwd,
-        env: { ...Bun.env },
+        env: { ...process.env },
       });
     } catch (error) {
       throw new ACPError("failed to start ACP agent process", error);
