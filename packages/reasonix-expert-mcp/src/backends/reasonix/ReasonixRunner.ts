@@ -1,7 +1,7 @@
 import { ACPSessionPool } from "../acp/ACPSessionPool";
 import type { AgentRunner, AgentRunResult } from "../core/interfaces";
 import type { ReviewDiffInput } from "../../mcp/tools/review-diff";
-import { which } from "bun";
+import { whichSync } from "../../runtime/which";
 
 // ---- Options ----
 
@@ -17,9 +17,10 @@ export class ReasonixRunner implements AgentRunner {
   private pool: ACPSessionPool;
 
   constructor(options: ReasonixRunnerOptions) {
-    const reasonixPath = process.platform === "win32"
-      ? (which("reasonix.cmd") ?? which("reasonix") ?? "reasonix")
-      : (which("reasonix") ?? "reasonix");
+    const reasonixPath = process.env.COAGENT_REASONIX_PATH
+      ?? (process.platform === "win32"
+        ? (whichSync("reasonix.cmd") ?? whichSync("reasonix") ?? "reasonix")
+        : (whichSync("reasonix") ?? "reasonix"));
     this.pool = new ACPSessionPool({
       command: [reasonixPath, "acp", "--model", options.model],
       cwd: options.cwd,
@@ -27,9 +28,9 @@ export class ReasonixRunner implements AgentRunner {
     });
   }
 
-  async runReviewDiff(input: ReviewDiffInput): Promise<AgentRunResult> {
+  async runReviewDiff(input: Record<string, unknown>): Promise<AgentRunResult> {
     await this.pool.ensureSession();
-    const prompt = buildReviewPromptText(input);
+    const prompt = buildReviewPromptText(input as unknown as ReviewDiffInput);
     return this.pool.sendPrompt(prompt);
   }
 
@@ -81,3 +82,5 @@ function buildReviewPromptText(input: ReviewDiffInput): string {
   );
   return lines.join("\n");
 }
+
+

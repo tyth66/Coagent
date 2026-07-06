@@ -2,12 +2,13 @@ import { RuntimeWorkerError } from "../runtime/RuntimeWorkerClient";
 import { extractSingleJsonObject } from "../backends/core/output-normalizer";
 import { ERROR_CODES, errorLayerForCode } from "../agent/error-taxonomy";
 import { reviewDiffHandler } from "./tools/review-diff";
+import type { AgentRunResult } from "../backends/core/interfaces";
 import type {
   RuntimeClient,
   ToolCallRequest,
   ToolResult,
   ToolHandler,
-  AgentToolsAdapterOptions,
+  ReasonixToolsAdapterOptions,
 } from "./types";
 
 // ── Runtime decision payload ──
@@ -25,6 +26,7 @@ interface RuntimeDecisionPayload {
 // ── Coagent wrapper metadata (attached by adapter, never by Reasonix) ──
 
 interface CoagentReviewResult {
+  [key: string]: unknown;
   review: Record<string, unknown>;
   metadata: {
     schema_version: "review_result_v1";
@@ -55,7 +57,7 @@ export function listTools() {
   return { tools };
 }
 
-export function createReasonixToolsAdapter(options: AgentToolsAdapterOptions) {
+export function createReasonixToolsAdapter(options: ReasonixToolsAdapterOptions) {
   let nextTaskNumber = 1;
   let nextRequestNumber = 1;
   const initialized = options.initialized ?? false;
@@ -251,4 +253,6 @@ function errorToolResult(code: string, summary: string, meta: Record<string, unk
 function diagnosticsMeta(stderr: string): Record<string, unknown> | undefined {
   return stderr ? { diagnostics: { stderr } } : undefined;
 }
+
+
 

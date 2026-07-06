@@ -1,13 +1,27 @@
 {
-  "name": "reasonix-expert-mcp",
+  "name": "coagent-reasonix-mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "start:mcp": "bun src/index.ts",
+    "start:mcp-node": "node dist/index.js",
+    "build": "tsc && bun scripts/postbuild.ts",
+    "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
   }
 }
+
+

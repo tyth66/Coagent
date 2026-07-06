@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { runServerFromEnv } from "./mcp/server";
 
 export function adapterScaffoldReady(): boolean {
@@ -13,3 +14,4 @@ if (import.meta.main) {
     process.exit(1);
   });
 }
+

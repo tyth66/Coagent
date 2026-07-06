@@ -1,4 +1,4 @@
-import type { Subprocess } from "bun";
+import { spawn, type SpawnResult } from "#runtime/spawn";
 import type { JsonRpcId } from "./ACPTypes";
 
 // ---- ACP frame types ----
@@ -57,7 +57,7 @@ export class ACPClient {
   private readonly command: string[];
   private readonly cwd: string;
   private readonly requestTimeoutMs: number;
-  private process: Subprocess<"pipe", "pipe", "pipe"> | null = null;
+  private process: SpawnResult | null = null;
   private nextId = 1;
   private readonly pending = new Map<JsonRpcId, PendingRequest>();
   private notificationCallback: ACPNotificationCallback | null = null;
@@ -73,20 +73,12 @@ export class ACPClient {
     this.notificationCallback = callback;
   }
 
-  // ---- Start the underlying process. Callers must 1) start(), 2) call() initialize, 3) call() session/new. ----
-
   async start(): Promise<void> {
     if (this.process) return;
 
-    let proc: Subprocess<"pipe", "pipe", "pipe">;
+    let proc: SpawnResult;
     try {
-      proc = Bun.spawn(this.command, {
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
-        cwd: this.cwd,
-        env: { ...process.env },
-      });
+      proc = await spawn({ command: this.command, cwd: this.cwd, env: { ...process.env } as Record<string, string> });
     } catch (error) {
       throw new ACPError("failed to start ACP agent process", error);
     }
@@ -94,10 +86,8 @@ export class ACPClient {
     this.process = proc;
     void this.readStdout(proc);
     void this.drainStderr(proc);
-    void proc.exited.then((exitCode) => this.handleExit(proc, exitCode));
+    void proc.exitCode.then((exitCode: number) => this.handleExit(proc, exitCode));
   }
-
-  // ---- Request (blocking) ----
 
   async call(method: string, params: unknown = {}): Promise<unknown> {
     const proc = this.process;
@@ -114,42 +104,36 @@ export class ACPClient {
       this.pending.set(id, { resolve, reject, timer });
 
       const frame: AcpRequestFrame = { jsonrpc: "2.0", id, method, params };
-      try {
-        proc.stdin.write(JSON.stringify(frame) + "\n");
-        proc.stdin.flush();
-      } catch (error) {
+      const writer = proc.stdin.getWriter();
+      writer.write(new TextEncoder().encode(JSON.stringify(frame) + "\n")).catch((error: unknown) => {
         clearTimeout(timer);
         this.pending.delete(id);
         reject(new ACPError("failed to write ACP request", error));
         void this.stopProcess();
-      }
+      });
+      writer.releaseLock();
     });
   }
-
-  // ---- Notification (fire-and-forget) ----
 
   async notify(method: string, params: unknown = {}): Promise<void> {
     const proc = this.process;
     if (!proc) throw new ACPError("ACP client not started");
     const frame: AcpNotificationFrame = { jsonrpc: "2.0", method, params };
-    try {
-      proc.stdin.write(JSON.stringify(frame) + "\n");
-      proc.stdin.flush();
-    } catch (error) {
-      throw new ACPError("failed to write ACP notification", error);
-    }
+    const writer = proc.stdin.getWriter();
+    await writer.write(new TextEncoder().encode(JSON.stringify(frame) + "\n"));
+    writer.releaseLock();
   }
-
-  // ---- Lifecycle ----
 
   async shutdown(): Promise<void> {
     if (!this.process) return;
     this.stopping = true;
     const proc = this.process;
     try { await this.call("session/close", {}); } catch { /* best-effort */ }
-    try { proc.stdin.end(); } catch { /* ignore */ }
-    try { proc.kill(); } catch { /* ignore */ }
-    await proc.exited.catch(() => undefined);
+    const writer = proc.stdin.getWriter();
+    await writer.close();
+    writer.releaseLock();
+    proc.kill();
+    await proc.exitCode.catch(() => undefined);
     this.process = null;
     this.stopping = false;
     this.rejectAll(new ACPError("ACP client shut down"));
@@ -157,12 +141,12 @@ export class ACPClient {
 
   // ---- Internal ----
 
-  private async readStdout(proc: Subprocess<"pipe", "pipe", "pipe">): Promise<void> {
-    const reader = proc.stdout.getReader();
+  private async readStdout(proc: SpawnResult): Promise<void> {
     const decoder = new TextDecoder();
     let buffer = "";
 
     try {
+      const reader = proc.stdout.getReader();
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -193,7 +177,7 @@ export class ACPClient {
       this.pending.delete(frame.id);
       clearTimeout(pending.timer);
       if (frame.error) {
-        pending.reject(new ACPError(frame.error.message));
+        pending.reject(new ACPError(String(frame.error?.message ?? "unknown error")));
       } else {
         pending.resolve(frame.result);
       }
@@ -202,12 +186,17 @@ export class ACPClient {
     }
   }
 
-  private async drainStderr(proc: Subprocess<"pipe", "pipe", "pipe">): Promise<void> {
+  private async drainStderr(proc: SpawnResult): Promise<void> {
     const reader = proc.stderr.getReader();
-    try { while (true) { const { done } = await reader.read(); if (done) break; } } catch { /* non-authoritative */ }
+    try {
+      while (true) {
+        const { done } = await reader.read();
+        if (done) break;
+      }
+    } catch { /* non-authoritative */ }
   }
 
-  private handleExit(proc: Subprocess<"pipe", "pipe", "pipe">, exitCode: number): void {
+  private handleExit(proc: SpawnResult, exitCode: number): void {
     if (this.process !== proc) return;
     this.process = null;
     if (this.stopping && exitCode === 0) return;
@@ -218,9 +207,8 @@ export class ACPClient {
     const proc = this.process;
     if (!proc) return;
     this.process = null;
-    try { proc.stdin.end(); } catch { /* ignore */ }
-    try { proc.kill(); } catch { /* ignore */ }
-    await proc.exited.catch(() => undefined);
+    proc.kill();
+    await proc.exitCode.catch(() => undefined);
     this.rejectAll(new ACPError("ACP agent process stopped"));
   }
 
@@ -254,7 +242,7 @@ function classifyFrame(value: unknown): AcpInboundFrame | null {
   const hasMethod = typeof obj.method === "string";
 
   if (hasMethod && !hasId) {
-    return { kind: "notification", method: obj.method, params: obj.params };
+    return { kind: "notification", method: obj.method as string, params: obj.params };
   }
   if (hasId && !hasMethod) {
     const error = obj.error as { code: number; message: string } | undefined;
@@ -262,4 +250,9 @@ function classifyFrame(value: unknown): AcpInboundFrame | null {
   }
   return null;
 }
+
+
+
+
+
 

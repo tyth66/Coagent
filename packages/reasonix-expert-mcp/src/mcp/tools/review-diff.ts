@@ -59,6 +59,7 @@ const INPUT_SCHEMA = {
 // ── Input types ──
 
 export interface ReviewDiffInput {
+  [key: string]: unknown;
   schema_version: "review_diff_input_v1";
   task_id?: string;
   request_id?: string;
@@ -196,3 +197,4 @@ export const reviewDiffHandler: ToolHandler = {
     return null;
   },
 };
+

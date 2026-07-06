@@ -1,3 +1,4 @@
+import { spawn, type SpawnResult } from "./spawn";
 import { encodeRequestFrame, parseResponseFrame, type JsonRpcId } from "./protocol";
 import { RuntimeWorkerError } from "./errors";
 
@@ -14,12 +15,10 @@ interface PendingRequest {
   timer: ReturnType<typeof setTimeout>;
 }
 
-type WorkerProcess = ReturnType<typeof Bun.spawn>;
-
 export class RuntimeWorkerClient {
   private readonly command: string[];
   private readonly requestTimeoutMs: number;
-  private process: WorkerProcess | null = null;
+  private process: SpawnResult | null = null;
   private nextRequestNumber = 1;
   private readonly pending = new Map<JsonRpcId, PendingRequest>();
   private stopping = false;
@@ -34,7 +33,7 @@ export class RuntimeWorkerClient {
   }
 
   async call(method: string, params: unknown = {}): Promise<unknown> {
-    const process = await this.ensureStarted();
+    const proc = await this.ensureStarted();
     const id = `REQ-${this.nextRequestNumber++}`;
     const frame = encodeRequestFrame(id, method, params);
 
@@ -47,15 +46,14 @@ export class RuntimeWorkerClient {
 
       this.pending.set(id, { resolve, reject, timer });
 
-      try {
-        process.stdin.write(frame);
-        process.stdin.flush();
-      } catch (error) {
+      const writer = proc.stdin.getWriter();
+      writer.write(new TextEncoder().encode(frame)).catch((error) => {
         clearTimeout(timer);
         this.pending.delete(id);
         reject(RuntimeWorkerError.unavailable("failed to write worker request", error));
         void this.stopProcess();
-      }
+      });
+      writer.releaseLock();
     });
   }
 
@@ -65,10 +63,10 @@ export class RuntimeWorkerClient {
     }
 
     this.stopping = true;
-    const process = this.process;
+    const proc = this.process;
     try {
       const result = await this.call("runtime.shutdown", {});
-      await process.exited.catch(() => undefined);
+      await proc.exitCode.catch(() => undefined);
       return result;
     } finally {
       this.process = null;
@@ -86,43 +84,37 @@ export class RuntimeWorkerClient {
       return;
     }
 
-    let process: WorkerProcess;
+    let proc: SpawnResult;
     try {
-      process = Bun.spawn(this.command, {
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      proc = await spawn({ command: this.command });
     } catch (error) {
       throw RuntimeWorkerError.unavailable("failed to start runtime worker", error);
     }
 
-    this.process = process;
-    void this.readStdout(process);
-    void this.drainStderr(process);
-    void process.exited.then((exitCode) => this.handleExit(process, exitCode));
+    this.process = proc;
+    void this.readStdout(proc);
+    void this.drainStderr(proc);
+    void proc.exitCode.then((exitCode) => this.handleExit(proc, exitCode));
   }
 
-  private async ensureStarted(): Promise<WorkerProcess> {
+  private async ensureStarted(): Promise<SpawnResult> {
     await this.start();
-    const process = this.process;
-    if (!process) {
+    const proc = this.process;
+    if (!proc) {
       throw RuntimeWorkerError.unavailable("runtime worker is unavailable");
     }
-    return process;
+    return proc;
   }
 
-  private async readStdout(process: WorkerProcess): Promise<void> {
-    const reader = process.stdout.getReader();
+  private async readStdout(proc: SpawnResult): Promise<void> {
     const decoder = new TextDecoder();
     let buffer = "";
 
     try {
+      const reader = proc.stdout.getReader();
       while (true) {
         const { value, done } = await reader.read();
-        if (done) {
-          break;
-        }
+        if (done) break;
         buffer += decoder.decode(value, { stream: true });
         let newlineIndex = buffer.indexOf("\n");
         while (newlineIndex >= 0) {
@@ -147,10 +139,9 @@ export class RuntimeWorkerClient {
       return;
     }
 
+    if (response.id == null) return;
     const pending = this.pending.get(response.id);
-    if (!pending) {
-      return;
-    }
+    if (!pending) return;
     this.pending.delete(response.id);
     clearTimeout(pending.timer);
 
@@ -161,47 +152,33 @@ export class RuntimeWorkerClient {
     pending.resolve(response.result);
   }
 
-  private async drainStderr(process: WorkerProcess): Promise<void> {
-    const reader = process.stderr.getReader();
+  private async drainStderr(proc: SpawnResult): Promise<void> {
+    const reader = proc.stderr.getReader();
     try {
-      while (!(await reader.read()).done) {
-        // Drain diagnostics so a verbose worker cannot block on a full stderr pipe.
+      while (true) {
+        const { done } = await reader.read();
+        if (done) break;
       }
     } catch {
       // Diagnostics are non-authoritative for the client contract.
     }
   }
 
-  private handleExit(process: WorkerProcess, exitCode: number): void {
-    if (this.process !== process) {
-      return;
-    }
+  private handleExit(proc: SpawnResult, exitCode: number): void {
+    if (this.process !== proc) return;
     this.process = null;
-    if (this.stopping && exitCode === 0) {
-      return;
-    }
+    if (this.stopping && exitCode === 0) return;
     this.rejectAll(
       RuntimeWorkerError.unavailable(`runtime worker exited with code ${exitCode}`),
     );
   }
 
   private async stopProcess(): Promise<void> {
-    const process = this.process;
-    if (!process) {
-      return;
-    }
+    const proc = this.process;
+    if (!proc) return;
     this.process = null;
-    try {
-      process.stdin.end();
-    } catch {
-      // The worker may already have exited.
-    }
-    try {
-      process.kill();
-    } catch {
-      // The worker may already have exited.
-    }
-    await process.exited.catch(() => undefined);
+    proc.kill();
+    await proc.exitCode.catch(() => undefined);
     this.rejectAll(RuntimeWorkerError.unavailable("runtime worker stopped"));
   }
 
@@ -213,3 +190,7 @@ export class RuntimeWorkerClient {
     }
   }
 }
+
+
+
+

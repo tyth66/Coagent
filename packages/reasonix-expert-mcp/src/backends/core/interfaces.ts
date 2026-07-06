@@ -8,11 +8,7 @@ export interface AgentRunResult {
 }
 
 export interface AgentRunner {
-  runReviewDiff(input: {
-    goal: string;
-    repo: { root: string };
-    artifacts: { diff_path: string };
-    [key: string]: unknown;
-  }): Promise<AgentRunResult>;
+  runReviewDiff(input: { [key: string]: unknown; goal: string; repo: { root: string }; artifacts: { diff_path: string } }): Promise<AgentRunResult>;
   shutdown(): Promise<void>;
 }
+
