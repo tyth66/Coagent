@@ -6,3 +6,4 @@ tmp/
 dist/
 
 packages/reasonix-expert-mcp/bin/
+.agent/
