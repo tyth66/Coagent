@@ -36,11 +36,13 @@ Codex MCP Host
   -> TypeScript reasonix-expert MCP Adapter (packages/reasonix-expert-mcp)
       -> managed Rust Runtime Worker (crates/coagent-runtime-worker)
           -> Rust Runtime Core (crates/coagent-runtime-core)
-      -> Reasonix CLI / mock worker
+      -> Backend (pluggable)
+          -> MockRunner     — for testing
+          -> ReasonixRunner — ACP protocol -> real Reasonix + DeepSeek models
 ```
 
 Two crates (Rust) + one package (TypeScript/Bun). The adapter calls the Rust
-Runtime Worker over JSON-RPC 2.0 stdio before delegating to Reasonix.
+Runtime Worker over JSON-RPC 2.0 stdio before delegating to the backend.
 SQLite stores append-only audit records under `.agent/coagent.sqlite`.
 
 ## Implementation Status
@@ -57,22 +59,30 @@ Rust pre-Reasonix runtime gate           (crates/coagent-runtime-core)
   - State engine (Created -> Running -> Completed/Failed)
   - Policy engine (operation, permission, path, argv, network)
   - Artifact policy (path allowlist/denylist with glob matching)
-  - SQLite append-only audit (10 tables, WAL, FK, triggers reject UPDATE/DELETE)
-  - JSON Schema validation + duplicate-key detection (schema/mod.rs)
-  - Canonical JSON/path normalization (canonical/mod.rs)
-Rust JSON-RPC stdio Runtime Worker       (crates/coagent-runtime-worker, 4 methods)
-TypeScript Runtime Worker client         (runtime/RuntimeWorkerClient.ts)
-mock review_diff vertical slice          (621-byte echo worker via MockRunner)
-healthcheck / conformance / error taxonomy (14 codes across 6 layers)
-backend profiles                         (mock, reasonix)
+  - SQLite append-only audit (10 tables, WAL, FK, triggers)
+  - JSON Schema validation + duplicate-key detection
+  - Canonical JSON/path normalization
+Rust JSON-RPC stdio Runtime Worker       (4 methods)
+TypeScript Runtime Worker client         (RuntimeWorkerClient.ts)
+Mock Reasonix runner                     (MockRunner.ts)
+Real Reasonix ACP runner                 (ReasonixRunner.ts -> ACPClient.ts)
+  - ACP session pool with prompt/notification collection
+  - E2E tested with deepseek-v4-flash: 3 findings in 25s
+  - PCI-DSS aware, multi-severity findings
+ACP client (stdio NDJSON JSON-RPC)       (ACPClient.ts + ACPSessionPool.ts)
+Codex MCP integration:                   verified
+  - Registered: codex mcp add coagent (mock + reasonix backends)
+  - Healthcheck: 7/7 checks pass
+Error taxonomy                           14 codes across 6 layers
+Worker contract conformance              implemented
+Backend profiles                         mock, conformance, reasonix-cli, mimocode-cli
 ```
 
 ### Active Transition
 
 The current `review_result_v1` contract still includes system envelope fields
 (`schema_version`, `task_id`, `request_id`, `status`) that belong in Coagent
-wrapper metadata, not in Reasonix review answer. The active plan moves
-these fields out of the Reasonix result payload.
+wrapper metadata, not in Reasonix review answer.
 
 ### Out of Scope
 
@@ -81,26 +91,16 @@ additional tools beyond review_diff
 patch application / write autonomy
 human approval UI
 remote transport / HTTP / daemon
-real (non-mock) Reasonix backend bridge
 context projection
 cache reuse (SQLite cache_entries table exists but reuse_enabled always 0)
 performance/security/architecture review tools
 ```
 
-## Forward Plan
-
-```text
-../implementation/review-diff-agent-collaboration-plan.md
-```
-
-Historical implementation evidence is archived under that same directory.
-
 ## Verification
 
 ```powershell
-cargo test --workspace
-bun test
+cargo test --workspace        # all pass
+bun test                      # 82 pass, 1 skip, 0 fail
 python -m json.tool schemas/coagent-v1.schema.json > $null
 cargo fmt --all -- --check
-git diff --check
 ```

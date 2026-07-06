@@ -1,6 +1,6 @@
 # Review Diff Agent Collaboration Plan
 
-> **Status**: Tasks 1-4 (doc freeze, role model, runtime gate, old roadmap collapse)
+> **Status**: Tasks 1, 3, 4 complete as of 2026-07-05. Task 2 (pure review result contract) is the next target. Real Reasonix ACP backend is operational as of 2026-07-06.
 > are complete as of 2026-07-05. Task 2 (pure review result contract refactoring
 > in code) is the next implementation target. The full gap analysis is in
 > [gaps-to-production.md](gaps-to-production.md).
@@ -101,7 +101,7 @@ Reasonix result contract and keep them inside Coagent wrapper metadata.
 - [ ] Remove wording that describes Reasonix as merely a CLI worker from current-status docs.
 - [ ] Keep backend/stdio details in implementation docs only.
 
-### Task 2: Redefine `review_diff` as a pure review result
+### Task 2: Redefine `review_diff` as a pure review result (PARTIAL — backend now real)
 
 **Files:**
 - `D:\Coagent\docs\Coagent\03-reasonix\01-tool-contracts-and-wrapper.md`
@@ -112,7 +112,7 @@ Reasonix result contract and keep them inside Coagent wrapper metadata.
 
 - [ ] Change the Reasonix result contract to `verdict`, `summary`, `findings`, `tests_to_run`, `risks`, `assumptions`, `confidence`.
 - [ ] Keep `task_id`, `request_id`, `schema_version`, backend exit code, and audit ids internal to Coagent.
-- [ ] Update mock Reasonix to emit the pure review result.
+- [ ] Update mock Reasonix to emit the pure review result (the mock still emits envelope fields; the real Reasonix backend is already operational via ACP protocol with deepseek-v4-flash).
 - [ ] Update adapter wrapping so MCP `structuredContent` contains the pure review result plus only Codex-useful review fields.
 - [ ] Preserve internal identity checking by tracking request identity outside Reasonix's result payload.
 

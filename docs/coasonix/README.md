@@ -62,21 +62,18 @@ Rust pre-Reasonix runtime gate:              implemented
   - JSON Schema validation + duplicate-key detection
 Rust JSON-RPC stdio Runtime Worker:          implemented (4 methods)
 TypeScript Runtime Worker client:            implemented
-mock review_diff vertical slice:             implemented
-Reasonix pure review-only output:            active transition (see forward plan)
+Mock Reasonix runner:                        implemented
+Real Reasonix ACP runner:                    implemented (E2E tested with deepseek-v4-flash)
+Codex MCP registration:                      verified
+Reasonix pure review-only output:            active transition
 additional tools / patch / approval / HTTP:  out of scope
 ```
-
-Old documents describing multi-tool, patch, approval, remote transport, or
-real backend profiles are post-v1 design or historical background. Do not
-expand the tool list until the review_diff pure-result boundary is clean.
 
 ## Verification
 
 ```powershell
 cargo test --workspace        # all pass
-bun test                      # 70 pass (13 fail: env/missing binaries)
+bun test                      # 82 pass, 1 skip, 0 fail
 python -m json.tool schemas/coagent-v1.schema.json > $null
 cargo fmt --all -- --check
-git diff --check
 ```

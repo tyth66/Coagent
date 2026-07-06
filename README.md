@@ -36,40 +36,77 @@ Codex MCP Host
   -> TypeScript reasonix-expert MCP Adapter (packages/reasonix-expert-mcp)
       -> managed Rust Runtime Worker (crates/coagent-runtime-worker)
           -> Rust Runtime Core (crates/coagent-runtime-core)
-      -> Reasonix CLI / mock worker
+      -> Backend (pluggable)
+          -> MockRunner     — hardcoded echo worker for testing
+          -> ReasonixRunner — ACP protocol -> real Reasonix (DeepSeek models)
 ```
 
 The TypeScript adapter handles MCP protocol (initialize, tools/list, tools/call).
 Before delegating to Reasonix, the adapter calls the Rust Runtime Worker over
 JSON-RPC 2.0 stdio. The Runtime Core evaluates state and policy gates.
-SQLite stores append-only audit records under `.agent/coagent.sqlite`.
+Only on `allow` does the adapter invoke the backend. SQLite stores append-only
+audit records under `.agent/coagent.sqlite`.
 
 ## Implementation Status
 
 ```text
-MCP setup / registration:                  implemented (codex/setup.ts, codex/health.ts)
-MCP server stdio startup:                  implemented (mcp/server.ts)
-inline tools/list inputSchema:             implemented (mcp/tools/review-diff.ts)
-Pluggable tool handler architecture:       implemented (strategy pattern)
-Multi-operation PolicyEngine registry:     implemented
-Rust pre-Reasonix runtime gate:            implemented
+MCP setup / registration:                   implemented
+MCP server stdio startup:                   implemented
+inline tools/list inputSchema:              implemented
+Pluggable tool handler architecture:        implemented (strategy pattern)
+Multi-operation PolicyEngine registry:      implemented
+Rust pre-Reasonix runtime gate:             implemented
   - State engine (Created->Running->Completed/Failed)
   - Policy engine (operation, permission, path, argv, network)
-  - SQLite append-only audit (10 tables, WAL, FK, no-UPDATE/no-DELETE triggers)
-  - JSON Schema validation + duplicate-key detection (schema/mod.rs)
+  - SQLite append-only audit (10 tables, WAL, FK, triggers)
+  - JSON Schema validation + duplicate-key detection
   - Artifact policy (path allowlist/denylist with glob matching)
-Rust JSON-RPC stdio Runtime Worker:        implemented (4 methods)
-TypeScript Runtime Worker client:          implemented (RuntimeWorkerClient.ts)
-mock review_diff vertical slice:           implemented (621-byte echo worker)
-healthcheck / conformance / error taxonomy: implemented
-pure Reasonix review-only result contract: active transition
-patch / approval / autonomous write path:  out of scope
+Rust JSON-RPC stdio Runtime Worker:         implemented (4 methods)
+TypeScript Runtime Worker client:           implemented
+Mock Reasonix runner:                       implemented
+Real Reasonix runner (ACP protocol):        implemented — E2E tested with deepseek-v4-flash
+ACP client (session pool, stdio NDJSON):    implemented
+Codex MCP registration:                     verified (codex mcp add coagent)
+Healthcheck:                                7/7 checks pass
+Error taxonomy:                             14 codes across 6 layers
+Worker contract conformance:                implemented
+pure Reasonix review-only result contract:  active transition
+patch / approval / autonomous write path:   out of scope
 ```
 
-The existing code path is operational but transitional: the current mock
-backend contract still uses envelope fields such as `schema_version`, `task_id`,
-and `request_id` in the review result. The active plan is to move those fields
-into Coagent internals and make Reasonix return only the review result.
+## Quick Start
+
+Register Coagent as a Codex MCP server (mock backend, for testing):
+
+```powershell
+bun run setup:codex-mcp --target-repo D:\path\to\target-repo
+Or manually (mock backend):
+
+```powershell
+$env:COAGENT_REPO_ROOT = "D:\path\to\target-repo"
+$env:COAGENT_RUNTIME_WORKER = "D:\Coagent\target\debug\coagent-runtime-worker.exe"
+$env:COAGENT_AGENT_COMMAND_JSON = '["D:\\Coagent\\bin\\coasonix-mock-worker.cmd","review-diff"]'
+bun run --silent --cwd=packages/reasonix-expert-mcp start:mcp
+```
+```
+
+Register with real Reasonix backend:
+
+```powershell
+codex mcp add coagent `
+  --env COAGENT_REPO_ROOT=D:\path\to\target-repo `
+  --env COAGENT_RUNTIME_WORKER=D:\Coagent\target\debug\coagent-runtime-worker.exe `
+  --env COAGENT_BACKEND=reasonix `
+  --env COAGENT_REASONIX_MODEL=deepseek-v4-flash `
+  --env COAGENT_AGENT_TIMEOUT_MS=180000 `
+  -- bun run --silent --cwd=packages/reasonix-expert-mcp start:mcp
+```
+
+Run healthcheck:
+
+```powershell
+bun run health:codex-mcp --target-repo D:\path\to\target-repo
+```
 
 ## Documentation Layers
 
@@ -86,45 +123,11 @@ into Coagent internals and make Reasonix return only the review result.
 | Implementation history | `docs/implementation/v1-mvp-execution-plan.md` | Historical milestone reference |
 | Gap analysis | `docs/implementation/gaps-to-production.md` | From MVP to production |
 
-## Roadmap
-
-The gap analysis from current MVP to a real agent-to-agent delegation system:
-
-[docs/implementation/gaps-to-production.md](docs/implementation/gaps-to-production.md)
-
-## Active Plan
-
-[docs/implementation/review-diff-agent-collaboration-plan.md](docs/implementation/review-diff-agent-collaboration-plan.md)
-
-## Useful Commands
-
-Install the Coagent MCP server into Codex with the mock backend profile:
+## Verification
 
 ```powershell
-bun run setup:codex-mcp --target-repo D:\path\to\target-repo
-```
-
-Run the Codex-side healthcheck:
-
-```powershell
-bun run health:codex-mcp --target-repo D:\path\to\target-repo
-```
-
-Run the local MCP stdio server directly:
-
-```powershell
-$env:COAGENT_REPO_ROOT = "D:\path\to\repo"
-$env:COAGENT_RUNTIME_WORKER = "D:\Coagent\target\debug\coagent-runtime-worker.exe"
-$env:COAGENT_AGENT_COMMAND_JSON = '["reasonix","review-diff"]'
-bun run --silent --cwd=packages/reasonix-expert-mcp start:mcp
-```
-
-Run local verification:
-
-```powershell
-cargo test --workspace
-bun test
+cargo test --workspace        # Rust Runtime Core + Worker: all pass
+bun test                      # TypeScript adapter: 82 pass, 1 skip, 0 fail
 python -m json.tool schemas/coagent-v1.schema.json > $null
 cargo fmt --all -- --check
-git diff --check
 ```
