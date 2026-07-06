@@ -33,19 +33,24 @@ status, audit ids, task routing, and protocol metadata internal.
 
 ```text
 Codex MCP Host
-  -> TypeScript reasonix-expert MCP Adapter (packages/reasonix-expert-mcp)
-      -> managed Rust Runtime Worker (crates/coagent-runtime-worker)
-          -> Rust Runtime Core (crates/coagent-runtime-core)
-      -> Backend (pluggable)
-          -> MockRunner     — hardcoded echo worker for testing
-          -> ReasonixRunner — ACP protocol -> real Reasonix (DeepSeek models)
+  -> coagent-mcp-server.exe (Rust, ~5 MB, single binary)
+      ├── rmcp (MCP protocol: initialize, tools/list, tools/call)
+      ├── RuntimeKernel (same-process: evaluate, complete, fail)
+      │     └── SQLite audit (.agent/coagent.sqlite)
+      └── Backend (pluggable)
+            ├── Mock        — returns mock review result
+            └── Reasonix    — ACP protocol -> real Reasonix (DeepSeek models)
 ```
 
-The TypeScript adapter handles MCP protocol (initialize, tools/list, tools/call).
-Before delegating to Reasonix, the adapter calls the Rust Runtime Worker over
-JSON-RPC 2.0 stdio. The Runtime Core evaluates state and policy gates.
-Only on `allow` does the adapter invoke the backend. SQLite stores append-only
-audit records under `.agent/coagent.sqlite`.
+The new Rust MCP server (`crates/coagent-mcp-server`) replaces the TypeScript
+adapter. It uses `rmcp` (official Rust MCP SDK, 14.7M downloads) for MCP protocol
+handling, and calls `coagent-runtime-core` directly in-process — no JSON-RPC
+subprocess. The TypeScript adapter (`packages/reasonix-expert-mcp`) is deprecated
+and will be removed in a future release.
+
+Two distributions available:
+- **Rust binary**: `cargo build --release -p coagent-mcp-server` → single `.exe`
+- **Node**: `node dist/index.js` (TypeScript adapter, legacy)
 
 ## Implementation Status
 
@@ -71,7 +76,9 @@ Healthcheck:                                7/7 checks pass
 Error taxonomy:                             14 codes across 6 layers
 Worker contract conformance:                implemented
 Pure review result boundary:                implemented (Reasonix returns semantic-only; Coagent wraps)
-Runtime lifecycle closure:                  pending (complete_operation / fail_operation API)
+Runtime lifecycle closure:                  implemented (same-process complete/fail in Rust MCP server)
+Rust MCP server (rmcp):                     implemented (full tool pipeline, replaces TypeScript adapter)
+TypeScript adapter:                          deprecated (kept for backward compatibility)
 patch / approval / autonomous write path:   out of scope
 ```
 
@@ -127,10 +134,18 @@ bun run health:codex-mcp --target-repo D:\path\to\target-repo
 ## Verification
 
 ```powershell
-cargo test --workspace        # Rust Runtime Core + Worker: all pass
+cargo test --workspace        # Rust: 62 pass (runtime-core, runtime-worker, mcp-server)
 bun test                      # TypeScript adapter: 82 pass, 1 skip, 0 fail
 python -m json.tool schemas/coagent-v1.schema.json > $null
 cargo fmt --all -- --check
+
+# Smoke test the Rust MCP server
+$env:COAGENT_REPO_ROOT = (Get-Location)
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | `
+  cargo run -p coagent-mcp-server
 ```
+
+
+
 
 

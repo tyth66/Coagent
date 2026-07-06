@@ -1,5 +1,6 @@
 {
   "name": "coagent-reasonix-mcp",
+  "description": "DEPRECATED: Use coagent-mcp-server (Rust crate) instead. Kept for backward compatibility.",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -23,5 +24,7 @@
     "typescript": "^5.9.3"
   }
 }
+
+
 
 

@@ -1,3 +1,7 @@
+// DEPRECATED: This JSON-RPC worker is superseded by coagent-mcp-server,
+// which calls coagent-runtime-core directly (same process, no JSON-RPC).
+// Kept for backward compatibility with the legacy TypeScript adapter.
+
 use std::{
     io::{self, BufRead, Write},
     path::PathBuf,
@@ -327,3 +331,4 @@ fn runtime_internal_error() -> JsonRpcError {
         message: "runtime_internal_error",
     }
 }
+
