@@ -2,11 +2,137 @@ use std::path::PathBuf;
 use std::process::Stdio;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
+use tokio::process::{Child, Command};
+use tokio::sync::Mutex;
 
 use super::mock::PureReviewResult;
 
-/// Reasonix backend runner using ACP protocol over stdio.
+// ── Persistent ACP Session ──
+
+/// A long-lived Reasonix ACP process with an established session.
+/// Created once at server startup, reused for every review_diff call.
+struct AcpSession {
+    child: Child,
+    stdin: tokio::process::ChildStdin,
+    reader: BufReader<tokio::process::ChildStdout>,
+    session_id: String,
+    next_request_id: u64,
+}
+
+impl AcpSession {
+    async fn connect(model: &str, cwd: &PathBuf) -> Result<Self, ReasonixError> {
+        let reasonix_cmd =
+            std::env::var("COAGENT_REASONIX_PATH").unwrap_or_else(|_| "reasonix".into());
+
+        let mut child = Command::new(&reasonix_cmd)
+            .arg("acp")
+            .arg("--model")
+            .arg(model)
+            .current_dir(cwd)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| ReasonixError::Spawn(e.to_string()))?;
+
+        let mut stdin = child.stdin.take().expect("stdin");
+        let stdout = child.stdout.take().expect("stdout");
+        let mut reader = BufReader::new(stdout);
+
+        // ACP initialize
+        send_frame(&mut stdin, 1, "initialize", &serde_json::json!({
+            "protocolVersion": 1,
+            "clientInfo": { "name": "coagent", "version": "0.1.0" }
+        })).await?;
+        read_response_line(&mut reader).await?; // ignore init response
+
+        // ACP session/new
+        send_frame(&mut stdin, 2, "session/new", &serde_json::json!({
+            "cwd": cwd.to_string_lossy()
+        })).await?;
+
+        let session_resp = read_response_line(&mut reader).await?;
+        let session: serde_json::Value = serde_json::from_str(&session_resp)
+            .map_err(|e| ReasonixError::Protocol(format!("session/new: {e}")))?;
+        let session_id = session["result"]["sessionId"]
+            .as_str()
+            .ok_or_else(|| ReasonixError::Protocol("missing sessionId".into()))?
+            .to_string();
+
+        Ok(Self {
+            child,
+            stdin,
+            reader,
+            session_id,
+            next_request_id: 3,
+        })
+    }
+
+    /// Send a session/prompt and collect the response.
+    async fn send_prompt(&mut self, goal: &str, diff_path: &str) -> Result<PureReviewResult, ReasonixError> {
+        let id = self.next_request_id;
+        self.next_request_id += 2; // leave room for potential other messages
+
+        let prompt = build_review_prompt(goal, diff_path);
+        send_frame(&mut self.stdin, id, "session/prompt", &serde_json::json!({
+            "sessionId": self.session_id,
+            "prompt": [{ "type": "text", "text": prompt }]
+        })).await?;
+
+        // Collect agent_message_chunk notifications until the final response
+        let mut collected_text = String::new();
+        loop {
+            let line = read_response_line(&mut self.reader).await?;
+            if line.is_empty() {
+                continue;
+            }
+            let msg: serde_json::Value = serde_json::from_str(&line)
+                .map_err(|e| ReasonixError::Protocol(format!("invalid frame: {e}")))?;
+
+            // Check for session/prompt response (our id)
+            if msg.get("id").and_then(|v| v.as_i64()) == Some(id as i64) {
+                if let Some(err) = msg.get("error") {
+                    return Err(ReasonixError::Protocol(
+                        err.get("message")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown error")
+                            .into(),
+                    ));
+                }
+                break;
+            }
+
+            // Collect agent_message_chunk notifications
+            if msg.get("method").and_then(|v| v.as_str()) == Some("session/update") {
+                if let Some(update) = msg.get("params").and_then(|p| p.get("update")) {
+                    if update.get("sessionUpdate").and_then(|v| v.as_str()) == Some("agent_message_chunk") {
+                        if let Some(text) = update.get("content").and_then(|c| c.get("text")).and_then(|v| v.as_str()) {
+                            collected_text.push_str(text);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Parse review from collected text
+        let review: PureReviewResult = serde_json::from_str(&collected_text)
+            .or_else(|_| extract_json(&collected_text))
+            .map_err(|e| ReasonixError::Protocol(format!("parse review: {e}")))?;
+
+        Ok(review)
+    }
+
+
+    async fn shutdown(&mut self) {
+        let _ = self.child.kill().await;
+    }
+}
+
+// ── Reasonix Runner (wraps AcpSession) ──
+
+/// Reasonix backend using a persistent ACP session.
+/// Lazy-initialized: connects on first use, reused thereafter.
 #[derive(Clone)]
 pub struct ReasonixRunner {
     model: String,
@@ -20,180 +146,87 @@ impl ReasonixRunner {
             cwd,
         }
     }
+}
 
-    /// Run a review_diff through the Reasonix ACP backend.
-    /// Returns the pure review result parsed from the ACP session output.
+// ── Session Pool (global, lazy-init) ──
+
+use std::sync::Arc;
+use std::sync::OnceLock;
+use tokio::sync::Mutex as TokioMutex;
+
+type SessionPool = Arc<TokioMutex<Option<AcpSession>>>;
+
+static SESSION_POOL: OnceLock<SessionPool> = OnceLock::new();
+
+fn get_pool() -> &'static SessionPool {
+    SESSION_POOL.get_or_init(|| Arc::new(TokioMutex::new(None)))
+}
+
+impl ReasonixRunner {
     pub async fn run(
         &self,
-        _goal: &str,
-        _diff_path: &str,
+        goal: &str,
+        diff_path: &str,
     ) -> Result<PureReviewResult, ReasonixError> {
-        // Start the ACP process
-        let mut child = Command::new("reasonix")
-            .arg("acp")
-            .arg("--model")
-            .arg(&self.model)
-            .current_dir(&self.cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| ReasonixError::Spawn(e.to_string()))?;
+        let pool = get_pool();
+        let mut guard = pool.lock().await;
 
-        let mut stdin = child.stdin.take().expect("stdin not available");
-        let stdout = child.stdout.take().expect("stdout not available");
-        let stderr = child.stderr.take().expect("stderr not available");
-
-        let mut reader = BufReader::new(stdout).lines();
-
-        // ACP initialize handshake
-        let init_frame = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": 1,
-                "clientInfo": { "name": "coagent", "version": "0.1.0" }
-            }
-        });
-        stdin
-            .write_all(format!("{}\n", init_frame).as_bytes())
-            .await
-            .map_err(|e| ReasonixError::Io(e.to_string()))?;
-        stdin.flush().await.map_err(|e| ReasonixError::Io(e.to_string()))?;
-
-        // Read initialize response
-        let _init_resp = read_line(&mut reader)
-            .await
-            .map_err(|e| ReasonixError::Protocol(format!("initialize failed: {e}")))?;
-
-        // ACP session/new
-        let session_frame = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "session/new",
-            "params": { "cwd": self.cwd.to_string_lossy() }
-        });
-        stdin
-            .write_all(format!("{}\n", session_frame).as_bytes())
-            .await
-            .map_err(|e| ReasonixError::Io(e.to_string()))?;
-        stdin.flush().await.map_err(|e| ReasonixError::Io(e.to_string()))?;
-
-        let session_resp = read_line(&mut reader)
-            .await
-            .map_err(|e| ReasonixError::Protocol(format!("session/new failed: {e}")))?;
-        let session: serde_json::Value = serde_json::from_str(&session_resp)
-            .map_err(|e| ReasonixError::Protocol(format!("invalid session response: {e}")))?;
-        let session_id = session["result"]["sessionId"]
-            .as_str()
-            .ok_or_else(|| ReasonixError::Protocol("missing sessionId".into()))?
-            .to_string();
-
-        // Build review prompt and send session/prompt
-        let prompt = build_review_prompt(_goal, _diff_path);
-        let prompt_frame = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 3,
-            "method": "session/prompt",
-            "params": {
-                "sessionId": session_id,
-                "prompt": [{ "type": "text", "text": prompt }]
-            }
-        });
-        stdin
-            .write_all(format!("{}\n", prompt_frame).as_bytes())
-            .await
-            .map_err(|e| ReasonixError::Io(e.to_string()))?;
-        stdin.flush().await.map_err(|e| ReasonixError::Io(e.to_string()))?;
-
-        // Collect agent_message_chunk notifications and final response
-        let mut collected_text = String::new();
-        loop {
-            let line = read_line(&mut reader)
-                .await
-                .map_err(|e| ReasonixError::Protocol(format!("read failed: {e}")))?;
-            if line.is_empty() {
-                continue;
-            }
-            let msg: serde_json::Value = serde_json::from_str(&line)
-                .map_err(|e| ReasonixError::Protocol(format!("invalid frame: {e}")))?;
-
-            // Check for session/prompt response
-            if msg.get("id").and_then(|v| v.as_i64()) == Some(3) {
-                if let Some(err) = msg.get("error") {
-                    return Err(ReasonixError::Protocol(
-                        err.get("message")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("unknown error")
-                            .into(),
-                    ));
-                }
-                break;
-            }
-
-            // Check for agent_message_chunk notification
-            if msg.get("method").and_then(|v| v.as_str()) == Some("session/update") {
-                if let Some(update) = msg.get("params").and_then(|p| p.get("update")) {
-                    if update.get("sessionUpdate").and_then(|v| v.as_str()) == Some("agent_message_chunk") {
-                        if let Some(text) = update
-                            .get("content")
-                            .and_then(|c| c.get("text"))
-                            .and_then(|v| v.as_str())
-                        {
-                            collected_text.push_str(text);
-                        }
-                    }
-                }
-            }
+        // Lazy-init: connect on first call
+        if guard.is_none() {
+            let session = AcpSession::connect(&self.model, &self.cwd).await?;
+            *guard = Some(session);
         }
 
-        // Drain stderr
-        let _stderr_output = drain_stderr(stderr).await;
-
-        // Parse JSON from collected text
-        let review: PureReviewResult = serde_json::from_str(&collected_text)
-            .or_else(|_| {
-                // Try to extract JSON from the text (may have markdown wrapping)
-                extract_json(&collected_text)
-            })
-            .map_err(|e| ReasonixError::Protocol(format!("failed to parse review result: {e}")))?;
-
-        Ok(review)
+        let session = guard.as_mut().unwrap();
+        session.send_prompt(goal, diff_path).await
     }
 }
+
+// ── Helpers ──
+
+async fn send_frame(
+    stdin: &mut tokio::process::ChildStdin,
+    id: u64,
+    method: &str,
+    params: &serde_json::Value,
+) -> Result<(), ReasonixError> {
+    let frame = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": method,
+        "params": params
+    });
+    stdin
+        .write_all(format!("{}\n", frame).as_bytes())
+        .await
+        .map_err(|e| ReasonixError::Io(e.to_string()))?;
+    stdin.flush().await.map_err(|e| ReasonixError::Io(e.to_string()))
+}
+
+async fn read_response_line(
+    reader: &mut BufReader<tokio::process::ChildStdout>,
+) -> Result<String, ReasonixError> {
+    let mut line = String::new();
+    reader
+        .read_line(&mut line)
+        .await
+        .map_err(|e| ReasonixError::Io(e.to_string()))?;
+    Ok(line)
+}
+
+// ── Error ──
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReasonixError {
-    #[error("spawn failed: {0}")]
+    #[error("spawn: {0}")]
     Spawn(String),
-    #[error("I/O error: {0}")]
+    #[error("I/O: {0}")]
     Io(String),
-    #[error("protocol error: {0}")]
+    #[error("protocol: {0}")]
     Protocol(String),
 }
 
-async fn read_line(
-    reader: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
-) -> Result<String, String> {
-    reader
-        .next_line()
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "stdout closed".to_string())
-}
-
-async fn drain_stderr(stderr: tokio::process::ChildStderr) -> String {
-    let reader = BufReader::new(stderr);
-    let mut lines = reader.lines();
-    let mut output = String::new();
-    while let Ok(Some(line)) = lines.next_line().await {
-        output.push_str(&line);
-        output.push('\n');
-    }
-    output
-}
+// ── Prompt builder ──
 
 fn build_review_prompt(goal: &str, diff_path: &str) -> String {
     format!(
@@ -213,12 +246,11 @@ fn build_review_prompt(goal: &str, diff_path: &str) -> String {
     )
 }
 
-/// Extract a JSON object from text that may contain markdown wrapping.
+// ── JSON extraction ──
+
 fn extract_json(text: &str) -> Result<PureReviewResult, serde_json::Error> {
-    // Try to find the first '{' and matching '}'
     if let Some(start) = text.find('{') {
         let slice = &text[start..];
-        // Try parsing progressively shorter slices
         let mut end = slice.len();
         while end > 0 {
             if let Ok(v) = serde_json::from_str(&slice[..end]) {
