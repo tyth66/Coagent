@@ -1,9 +1,5 @@
 target/
-node_modules/
-*.log
-tmp/
-
-dist/
-
-packages/reasonix-expert-mcp/bin/
 .agent/
+packages/reasonix-expert-mcp/bin/
+node_modules/
+dist/

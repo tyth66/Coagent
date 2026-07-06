@@ -1,40 +1,35 @@
 # Coagent Repository Guidelines
 
+Pure Rust project — no TypeScript, no Bun, no Node.js required.
+
 ## Project Structure
 
 ```
 crates/
   coagent-runtime-core/     Runtime state + policy + audit (library)
   coagent-runtime-worker/   [DEPRECATED] JSON-RPC stdio worker
-  coagent-mcp-server/       Rust MCP server binary (primary)
+  coagent-mcp-server/       MCP server binary (primary)
 
-packages/
-  reasonix-expert-mcp/      [DEPRECATED] TypeScript MCP adapter
-
-docs/
-  coagent/                 Canonical documentation
+docs/coagent/              Canonical documentation
 ```
 
-## Build, Test, and Development Commands
+## Build, Test, and Verify
 
-- `cargo build -p coagent-mcp-server` — build the Rust MCP server binary
-- `cargo build --release -p coagent-mcp-server` — release build (~5 MB exe)
-- `cargo test --workspace` — run all Rust tests
-- `bun test` — run TypeScript adapter tests (legacy)
-- `cargo fmt --all -- --check` — check Rust formatting
-- `cargo clippy --workspace -- -D warnings` — lint all Rust code
+- `cargo build -p coagent-mcp-server` — build debug binary
+- `cargo build --release -p coagent-mcp-server` — release build (~5 MB)
+- `cargo test --workspace` — run all tests
+- `cargo fmt --all -- --check` — check formatting
+- `cargo clippy --workspace -- -D warnings` — lint all code
 
 ## Coding Style
 
-- Rust: standard `rustfmt` + `cargo clippy`, edition 2024
-- TypeScript: `bun test` for testing, no build step needed (Bun runs `.ts` directly)
-- Markdown: ATX headings (`#`), fenced code blocks, concise paragraphs
+- Rust edition 2024, standard `rustfmt` + `cargo clippy`
+- Markdown: ATX headings, fenced code blocks, concise paragraphs
 
-## Commit Protocol
+## Commit Protocol (Lore)
 
-Use the Lore commit format:
 ```
-<one-line intent: why, not what>
+<intent line: why, not what>
 
 Constraint: <external force>
 Rejected: <alternative> | <reason>
@@ -47,6 +42,6 @@ Not-tested: <known gaps>
 
 ## Documentation
 
-Primary docs: `docs/coagent/`. Architecture docs are in `docs/coagent/architecture/`.
+Primary docs: `docs/coagent/`. Architecture docs: `docs/coagent/architecture/`.
 
 Update documentation when changing architecture, APIs, or deployment.
