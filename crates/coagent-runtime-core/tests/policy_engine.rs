@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+﻿use std::path::PathBuf;
 
 use coagent_runtime_core::policy::{
     ApprovalPolicy, BackendBinding, PermissionLevel, PolicyEngine, PolicyEvaluationRequest,
@@ -115,7 +115,7 @@ fn review_diff_registry_exposes_tool_contract_metadata() {
         .get("reasonix.review_diff")
         .expect("review_diff tool is registered");
 
-    assert_eq!(tool.operation(), "reasonix.review_diff");
+    assert_eq!(tool.operation(), "coagent.review_diff");
     assert_eq!(tool.required_permission(), PermissionLevel::L1DiffReview);
     assert_eq!(tool.backend_binding(), BackendBinding::ReasonixAcp);
     assert_eq!(tool.approval_policy(), ApprovalPolicy::Never);

@@ -144,7 +144,7 @@ impl rmcp::handler::server::ServerHandler for CoagentServer {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     let review_tool = ToolRegistry::review_diff()
-        .get("reasonix.review_diff")
+        .get("coagent.review_diff")
         .expect("review_diff tool definition")
         .clone();
     // Build BackendRegistry with available backends
