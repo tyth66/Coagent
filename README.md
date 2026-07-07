@@ -94,7 +94,7 @@ ACP contract tests:                         implemented (5 fake stdio + multi-st
 ## Verification
 
 ```powershell
-cargo test --workspace    # 153 pass, 1 ignored (live Reasonix integration)
+cargo test --workspace    # 157 pass, 1 ignored (live Reasonix integration)
 cargo build -p coagent-mcp-server
 cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
