@@ -213,7 +213,7 @@ send_prompt() fails with Io/Protocol/EOF/Timeout
 Audit events: `reasonix_session_restarted`, `reasonix_session_failed`,
 `reasonix_protocol_error`, `reasonix_timeout`.
 
-**Resolution**: `ReasonixError::is_recoverable()` identifies Protocol/Io errors. `ReasonixRunner::run()` catches recoverable errors, drops the dead session, reconnects once, and retries the prompt. Non-recoverable errors propagate immediately.
+**Resolution**: `ReasonixRunner::run()` matches `send_prompt()` result. Ok passes through. Err(recoverable: Io|Protocol) drops session (`*guard = None`), reconnects, retries, stores new session. Non-recoverable errors propagate.
 
 ---
 
@@ -242,7 +242,7 @@ but not `policy_evaluation_results`. The audit trail has gaps.
 | Task lifecycle | `task_state` + `audit_events` | ✓ | ✓ |
 | Runtime decision | `runtime_decisions` | ✓ | ✓ |
 
-**Resolution**: Pipeline now writes `audit_events` for output schema validation failures and wrapper schema validation failures with full context (task_id, request_id, path, message). Core audit path completed: audit_events + runtime_decisions + task_state + schema validation events.
+**Resolution**: All 3 schema validation stages write audit_events: input_schema_validation_failed, output_schema_validation_failed, wrapper_schema_validation_failed. Every record includes task_id, request_id, expected_schema, and errors[] array. Pre-gate input failures use placeholder IDs for audit completeness.
 
 ---
 

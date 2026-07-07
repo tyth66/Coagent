@@ -1,98 +1,108 @@
-# MCP Server (rmcp) — v2
+# MCP Server (rmcp) — v2.1
 
 The MCP server is built with `rmcp` (official Rust MCP SDK, 14.7M downloads).
 
-## Tool Definition
+## Tool Definition (declarative, ~30 lines)
 
 ```rust
 #[tool_router]
 impl CoagentServer {
-    #[tool(
-        name = "reasonix.review_diff",
-        description = "Review a prepared diff through the Coagent runtime gate."
-    )]
+    #[tool(name = "reasonix.review_diff", description = "...")]
     async fn review_diff(
         &self,
         Parameters(input): Parameters<ReviewDiffInput>,
     ) -> Result<CallToolResult, ErrorData> {
-        // 1. Validate input (SchemaRegistry — single authority, JSON Schema 2020-12)
-        // 2. Runtime gate (same-process evaluate_operation)
-        //     → Allow: continue to backend
-        //     → Deny: return error
-        //     → RequireApproval: return {"status":"approval_required",...}
-        // 3. Invoke backend (Mock | Reasonix ACP)
-        // 4. Validate output (SchemaRegistry)
-        // 5. Complete/Fail lifecycle close
-        // 6. Wrap { review, metadata } response
+        let artifact_paths = ArtifactPaths::collect_read(&input.artifacts.diff_path, &[...]);
+        let context = ContextProjection::from_input(/* 9 fields */);
+        let goal = input.goal.clone();
+        let diff_path = input.artifacts.diff_path.clone();
+
+        self.executor.execute(
+            input.task_id, input.request_id, &input, artifact_paths,
+            |backend| async move { /* backend call */ },
+            |review| review.validate().map_err(ValidationError::from),
+            |review| CoagentReviewWrapper { review, metadata: ... },
+        ).await
     }
 }
 ```
 
-## Request Flow
+## Pipeline Stages (RuntimeToolExecutor)
 
 ```
-Codex MCP tools/call
-  -> rmcp dispatches to #[tool] handler
-  -> handler validates input via SchemaRegistry (JSON Schema 2020-12)
-  -> handler calls RuntimeKernel::evaluate_operation (same process)
-  -> on Allow: invokes Backend (Mock or Reasonix ACP)
-  -> on RequireApproval: returns paused status, caller must approve
-  -> validates output via SchemaRegistry
-  -> calls RuntimeKernel::complete_operation or fail_operation
-  -> wraps { review, metadata } result
-  -> rmcp serializes to MCP CallToolResult JSON
+1. Validate input schema   → SchemaRegistry, audit on failure
+2. Generate/enforce IDs    → UUID or COAGENT_REQUIRE_EXTERNAL_IDS
+3. Runtime gate            → evaluate_operation (Allow/Deny/RequireApproval)
+4. Invoke backend          → Mock | Reasonix ACP (with session recovery)
+5. Validate output         → Finding-level + SchemaRegistry, audit on failure
+6. Validate wrapper schema → SchemaRegistry, audit on failure
+7. Complete lifecycle      → complete_operation (close step, task stays alive)
+8. Serialize response      → MCP CallToolResult JSON
 ```
+
+Each stage writes audit events on failure. Schema validation failures at
+stages 1, 5, and 6 all produce `audit_events` records with task_id,
+request_id, expected_schema, and errors[].
 
 ## Backend Pluggability
 
 ```rust
 enum Backend {
-    Mock,                        // Returns PureReviewResult::mock_pass()
-    Reasonix(ReasonixRunner),   // ACP protocol to DeepSeek models
+    Mock,                        // PureReviewResult::mock_pass()
+    Reasonix(ReasonixRunner),   // ACP → subprocess → DeepSeek, session recovery
 }
 ```
 
-By default, the server constructs the backend from the registered tool's backend
-binding. `COAGENT_BACKEND=mock` or `COAGENT_BACKEND=reasonix` can override that
-binding for local development and integration tests. Unknown backend override
-values fail closed during configuration parsing.
+`COAGENT_BACKEND=mock|reasonix` overrides the registered tool's backend binding.
 
-## Reasonix ACP Contract Tests
+## Reasonix ACP Session Recovery
 
-5 protocol scenarios covered with fake stdio ACP backend (no live API key):
+The `ReasonixRunner` implements automatic reconnect + retry:
 
-- initialize/session handshake error frames preserve backend error messages
-- `session/update` agent text chunks are collected into a review result
-- invalid model output is rejected as `parse review`
-- prompt-time process EOF is surfaced as protocol error
-- session/new error is surfaced correctly
+```
+send_prompt() → Ok → return result
+send_prompt() → Err(Io|Protocol) → drop session → reconnect → retry same prompt
+send_prompt() → Err(Spawn|Timeout) → propagate immediately
+```
 
-## Input/Output Schema
+This ensures a single Reasonix child process crash does not permanently
+disable the Coagent server.
 
-`ReviewDiffInput` derives `schemars::JsonSchema` — rmcp auto-generates
-MCP `inputSchema` from the struct fields. `PureReviewResult` is the
-canonical review output, wrapped with `CoagentReviewWrapper` metadata.
+## Context Projection
 
-## Schema Unification (v2)
+`ContextProjection` captures all `ReviewDiffInput` fields (goal, diff_path,
+context_path, test_log_path, build_log_path, focus, constraints, base_branch,
+working_branch) and renders them as a structured prompt section for Reasonix.
 
-The handwritten `ReviewDiffInput::validate()` has been replaced with a passthrough.
-All validation is routed through `SchemaRegistry` using the embedded
-`schemas/coagent-v1.schema.json` (JSON Schema 2020-12). The schema registry
-is the single authority for:
+## Finding Type Safety
 
-- request validation (`review_diff_input_v1`)
-- response validation (`pure_review_result_v1`)
-- wrapper validation (`coagent_review_wrapper_v1`)
-- duplicate-key rejection (`parse_json_no_duplicate_keys`)
+`Finding` struct with `Severity` enum (`Blocker|Major|Minor|Note`).
+`PureReviewResult::validate()` checks per-finding: issue non-empty,
+category non-empty, confidence 0.0-1.0. JSON Schema provides second-layer
+enum value enforcement.
+
+## Schema Authority
+
+`SchemaRegistry` is the single validation authority (JSON Schema 2020-12).
+Embedded `schemas/coagent-v1.schema.json` defines:
+
+- `review_diff_input_v1` — MCP request schema
+- `pure_review_result_v1` — Reasonix output schema
+- `coagent_review_wrapper_v1` — Coagent wrapped response
+
+## ID Orchestration
+
+`COAGENT_REQUIRE_EXTERNAL_IDS=true` forces callers to provide both `task_id`
+and `request_id`. Pipeline returns `invalid_params` if missing. Default
+`false` preserves backward compatibility with auto-generated UUIDs.
 
 ## Deployment
 
 ```powershell
-# Build
 cargo build --release -p coagent-mcp-server
 
-# Register with Codex (mock backend)
 codex mcp add coagent `
   --env COAGENT_REPO_ROOT=D:\your-repo `
+  --env COAGENT_BACKEND=mock `
   -- D:\Coagent\target\release\coagent-mcp-server.exe
 ```

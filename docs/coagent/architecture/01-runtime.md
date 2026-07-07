@@ -1,9 +1,11 @@
-# Runtime: State, Policy, Audit (v2)
+# Runtime: State, Policy, Audit (v2.1)
 
 The Rust RuntimeKernel runs in-process inside the MCP server binary.
 No JSON-RPC subprocess.
 
-## State Machine (10-state FSM)
+## State Machine
+
+### TaskState (10-state FSM, long-lived)
 
 ```
                 ┌──────────────────────────┐
@@ -19,7 +21,7 @@ No JSON-RPC subprocess.
     │         ┌────────────┼────────────┐         │   │
     │         ▼            ▼            ▼         │   │
     │   ┌──────────┐ ┌──────────────┐ ┌────────┐ │   │
-    │   │ Blocked  │ │WaitingApproval│ │Retrying│─┼───┘ (retry dispatched)
+    │   │ Blocked  │ │WaitingApproval│ │Retrying│─┼───┘
     │   └────┬─────┘ └──────┬───────┘ └────────┘ │
     │        │              │                     │
     │        │ (unblock)    │ (approved/rejected) │
@@ -43,14 +45,28 @@ No JSON-RPC subprocess.
         └─────────────────┘
 ```
 
-### Subtask Dependencies
+### Operation-Level Steps (per tool call)
 
-Tasks can declare subtask dependencies that block completion:
+Each `evaluate_operation()` creates a `runtime_steps` row. A single task can
+have multiple operations. `complete_operation()` closes the step; `complete_task()`
+transitions the task itself to terminal. This two-layer model enables:
+
+```
+TASK-1:
+  reasonix.review_architecture  → operation completed
+  reasonix.review_diff          → operation completed
+  reasonix.verify_tests         → operation completed
+  complete_task()               → task Completed
+```
+
+Cancelled is the only task-level state that blocks new operations.
+
+### Subtask Dependencies
 
 ```rust
 state.add_subtask("SUB-1", TaskStateValue::Completed);
 state.add_subtask("SUB-2", TaskStateValue::Completed);
-// transition_to(Completed) rejected until all subtasks resolved
+// transition_to(Completed) rejected until all resolved
 state.resolve_subtask("SUB-1");
 state.resolve_subtask("SUB-2");
 state.transition_to(TaskStateValue::Completed).unwrap();
@@ -67,36 +83,22 @@ state.set_timeout(TaskTimeout {
 });
 ```
 
-### Cancel Propagation
-
-Cancelling a parent task cascades to subtasks when `cancel_propagation` is enabled (default true).
-
-## Policy Engine (v2)
+## Policy Engine
 
 ### Dynamic Tool Registry
 
-Thread-safe runtime registry supports:
-
-- `register()` — compile-time registration (builder pattern)
-- `register_dynamic()` — runtime addition
-- `unregister()` — runtime removal
-- `enable()` / `disable()` — toggle without removing
-- `upgrade()` — version-bump in-place replacement
-- `list_enabled()` — enumerate active tools
-- `snapshot()` — read-consistent view for PolicyEngine init
+Thread-safe (`Arc<RwLock<HashMap>>`): `register_dynamic()`, `unregister()`,
+`enable()`, `disable()`, `upgrade()`, `list_enabled()`, `snapshot()`.
 
 ### Approval Gates
 
-`ApprovalPolicy::Required` causes `PolicyEngine::evaluate()` to return `RequireApproval`.
-The MCP server gates execution: returns `{"status": "approval_required", ...}` before backend invocation.
-Caller must transition the task from `WaitingApproval` back to `Running` to proceed.
+`ApprovalPolicy::Required` → `RequireApproval` runtime decision.
+Pipeline returns `{"status":"approval_required"}`. Caller transitions
+task from `WaitingApproval` back to `Running` to resume.
 
 ### Permission Levels
 
-- `L0_READONLY` — read-only observation
-- `L1_DIFF_REVIEW` — read diffs + context, write results
-- `L2_PATCH_ONLY` — generate patches
-- `L3_ISOLATED_WORKTREE` — full worktree access
+`L0_READONLY` → `L1_DIFF_REVIEW` → `L2_PATCH_ONLY` → `L3_ISOLATED_WORKTREE`
 
 ### Runtime Decisions
 
@@ -104,72 +106,98 @@ Caller must transition the task from `WaitingApproval` back to `Running` to proc
 
 Merge priority: `Deny > FatalError > RequireApproval > RetryableError > Allow`
 
+## Pipeline (RuntimeToolExecutor)
+
+8-stage unified execution in `pipeline/mod.rs`:
+
+```
+Stage 1: Validate input schema   → SchemaRegistry
+Stage 2: Generate/enforce IDs    → UUID or COAGENT_REQUIRE_EXTERNAL_IDS
+Stage 3: Runtime gate            → evaluate_operation (Allow/Deny/RequireApproval)
+Stage 4: Invoke backend          → Mock | Reasonix ACP
+Stage 5: Validate output         → Finding-level + SchemaRegistry
+Stage 6: Validate wrapper schema → SchemaRegistry
+Stage 7: Complete lifecycle      → complete_operation (close step)
+Stage 8: Serialize response      → MCP CallToolResult JSON
+```
+
+Each tool handler is a ~30-line declarative wrapper. Adding a new tool requires:
+input type, artifact paths, backend closure, output validator, wrapper builder.
+
+## Context Projection
+
+`ContextProjection` captures all 9 `ReviewDiffInput` fields and projects them
+into the Reasonix prompt:
+
+```
+AVAILABLE FILES:
+  - diff: .agent/diffs/current.diff
+  - test log: .agent/logs/test.log
+BASE BRANCH: main
+FOCUS AREAS:
+  - state machine
+  - policy engine
+CONSTRAINTS:
+  - ignore formatting changes
+```
+
+## Finding Type Safety
+
+`Finding` struct with `Severity` enum (`Blocker | Major | Minor | Note`).
+Dual-layer validation: Rust `validate()` checks issue non-empty, category
+non-empty, confidence 0.0-1.0 per finding. JSON Schema provides second-layer
+enum value enforcement.
+
 ## Execution Sandbox
 
-`SandboxConfig` provides:
-
-- **Working directory** control for backend processes
-- **Environment variable allowlist/denylist** — empty allowlist = deny all
-- **Resource budgets**: wall-clock duration, output bytes, token budget, CPU time
-
-```rust
-let sandbox = SandboxConfig::new()
-    .with_working_directory("./task-workspace")
-    .with_env_allowlist(vec!["PATH".into(), "HOME".into()])
-    .with_budgets(ResourceBudgets {
-        max_wall_clock: Some(Duration::from_secs(60)),
-        max_output_bytes: Some(1_048_576),
-        ..Default::default()
-    });
-```
+`SandboxConfig`: working directory, env allowlist/denylist, resource budgets
+(max_wall_clock, max_output_bytes, max_tokens, max_cpu_time).
 
 ## Event-Sourcing Replay
 
-`replay_task_state()` rebuilds task state from the append-only event log:
+`replay_task_state()` rebuilds task execution summary from append-only event log.
+`check_idempotency()` prevents duplicate event emission.
 
-```rust
-let replayed = replay_task_state(&store, "TASK-1")?;
-// replayed.steps_started, replayed.steps_completed,
-// replayed.policy_decisions, replayed.last_decision
+## ACP Session Recovery
+
+`ReasonixRunner::run()` implements reconnect + retry:
+
 ```
-
-`check_idempotency()` prevents duplicate event emission for the same logical operation.
-
-## Schema Authority
-
-`SchemaRegistry` is the single validation authority. The handwritten `ReviewDiffInput::validate()` has been replaced with a passthrough that always returns `Ok(())` — all validation is routed through JSON Schema 2020-12 via the embedded `schemas/coagent-v1.schema.json`.
+send_prompt → Ok → return
+send_prompt → Err(recoverable: Io|Protocol) → drop session → reconnect → retry
+send_prompt → Err(non-recoverable) → propagate
+```
 
 ## Audit (SQLite)
 
-12 tables in `.agent/coagent.sqlite`:
-- `tasks`, `task_state` — task lifecycle
-- `audit_events` — append-only event log (UPDATE/DELETE triggers reject mutations)
-- `runtime_steps` — per-operation/request runtime step records
-- `runtime_events` — append-only step/task event stream
-- `runtime_decisions` — each evaluate_operation result
-- `schema_validation_results` — schema check outcomes
-- `policy_evaluation_results` — policy check outcomes
-- `locks`, `artifacts`, `cache_entries`, `runtime_metadata`
+12 tables in `.agent/coagent.sqlite`, WAL mode, FULL synchronous, 5s busy timeout.
 
-WAL mode, FULL synchronous, 5s busy timeout.
+### Schema Validation Audit (all 3 stages)
+
+Every schema validation failure writes an `audit_events` record:
+
+| Stage | event_type | payload |
+|-------|-----------|---------|
+| Input validation | `input_schema_validation_failed` | task_id, request_id, expected_schema, errors[] |
+| Output validation | `output_schema_validation_failed` | task_id, request_id, expected_schema, errors[] |
+| Wrapper validation | `wrapper_schema_validation_failed` | task_id, request_id, expected_schema, errors[] |
+
+Input validation failures before ID generation use `"pre-gate"` as placeholder
+task_id/request_id to ensure audit completeness even for pre-gate errors.
+
+### Other Audit Records
+
+- `audit_events` — append-only (UPDATE/DELETE triggers reject)
+- `runtime_decisions` — each `evaluate_operation` result
+- `task_state` — task lifecycle transitions
+- `runtime_steps` + `runtime_events` — per-operation execution records
+- `schema_validation_results`, `policy_evaluation_results` — table exists, wired via kernel APIs
 
 ## Lifecycle API
 
 ```rust
-// Permission gate (called before every backend invocation)
-kernel.evaluate_operation(request) -> RuntimeDecision { allow | deny | ... }
-
-// Lifecycle closure (called after backend invocation)
-kernel.complete_operation(task_id, request_id, operation) -> Completed
-kernel.fail_operation(task_id, request_id, operation, error_code, message) -> Failed
+kernel.evaluate_operation(request) → RuntimeDecision
+kernel.complete_operation(task_id, request_id, operation) → closes step, task stays alive
+kernel.fail_operation(task_id, request_id, operation, error_code, message) → closes step
+kernel.complete_task(task_id) → transitions task to Completed (terminal)
 ```
-
-## Step/Event Model
-
-Each `evaluate_operation` creates a `runtime_steps` row and emits append-only `runtime_events`:
-
-- `step_started`
-- `policy_evaluated`
-- `lifecycle_closed`
-
-Denied policy decisions close their step immediately with the runtime decision value.

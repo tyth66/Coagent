@@ -28,15 +28,16 @@ Codex MCP Host
   -> coagent-mcp-server.exe (~5 MB, single binary, zero dependencies)
       ├── Pipeline         RuntimeToolExecutor (8-stage unified execution)
       ├── RuntimeKernel    same-process state machine + policy engine + SQLite audit
-      │   ├── StateMachine 10-state FSM + operation-level steps (TaskState + OperationState)
+      │   ├── StateMachine 10-state FSM + per-operation steps
       │   │                Queued→Running→Blocked/WaitingApproval/Retrying/PartiallyCompleted
       │   │                + subtask dependencies, timeout, cancel propagation
       │   ├── PolicyEngine dynamic ToolRegistry + approval gates + path sandbox
-      │   ├── ContextProj  full input-to-prompt projection (focus, constraints, files)
-      │   ├── Sandbox      execution isolation (env allowlist/denylist, resource budgets)
+      │   ├── ContextProj  full input-to-prompt projection (9 fields)
+      │   ├── Sandbox      execution isolation (env allowlist, resource budgets)
       │   ├── Replay       event-sourcing replay engine with idempotency
-      │   └── Audit        SQLite 12 tables, WAL, append-only, foreign keys
-      └── Backend          Mock | Reasonix (ACP -> DeepSeek models, session recovery)
+      │   └── Audit        SQLite 12 tables, WAL, append-only
+      │                    schema validation audit on all 3 stages
+      └── Backend          Mock | Reasonix (ACP → DeepSeek, session recovery)
 ```
 
 ## Project Structure
@@ -48,8 +49,8 @@ crates/
   coagent-mcp-server/       Binary (primary)
     src/
       pipeline/             RuntimeToolExecutor — unified 8-stage execution pipeline
-      backends/             Mock, Reasonix ACP (with session recovery), ContextProjection
-      tools/                Tool-specific input/output types + validation
+      backends/             Mock, Reasonix ACP (session recovery), ContextProjection
+      tools/                Tool-specific input/output types + Finding validation
 docs/coagent/               Canonical documentation
 schemas/                    JSON Schema 2020-12 contracts
 .codex/skills/coagent/      Project-embedded usage skill
@@ -59,26 +60,29 @@ schemas/                    JSON Schema 2020-12 contracts
 
 ```text
 MCP protocol (rmcp):                        implemented (official Rust SDK)
-RuntimeToolExecutor pipeline:               implemented (8-stage: validate→gate→backend→validate→wrap)
-Two-layer state machine:                    implemented (TaskState + per-operation steps, multi-op tasks)
-10-state task FSM:                          implemented (9 alive + Cancelled terminal)
+RuntimeToolExecutor pipeline:               implemented (8-stage unified execution)
+Two-layer state machine:                    implemented (TaskState long-lived, per-op steps)
+10-state task FSM:                          implemented (9 alive states + Cancelled terminal)
+Multi-operation tasks:                      implemented (complete_task() separate from complete_operation())
 Subtask dependencies + timeout/cancel:      implemented
 Dynamic tool registry:                      implemented (register/unregister/enable/disable/upgrade)
-Approval gate:                              implemented (RequireApproval → WaitingApproval)
+Approval gate:                              implemented (RequireApproval → WaitingApproval → approve → resume)
 Context projection:                         implemented (all 9 input fields reach Reasonix prompt)
-Finding type safety:                        implemented (strong Finding struct + Severity enum)
+Finding type safety:                        implemented (Finding struct + Severity enum, dual-layer validation)
 ID orchestration:                           implemented (COAGENT_REQUIRE_EXTERNAL_IDS)
-ACP session recovery:                       implemented (reconnect + retry on recoverable errors)
+ACP session recovery:                       implemented (reconnect + retry on Io/Protocol errors)
 Policy engine:                              implemented (operation, permission, path, network, approval)
 Execution sandbox:                          implemented (env allowlist/denylist, resource budgets)
 Event-sourcing replay:                      implemented (replay_task_state, idempotency check)
 Artifact policy:                            implemented (allowlist/denylist, glob, traversal, symlink)
 Schema unification:                         implemented (SchemaRegistry single authority, JSON Schema 2020-12)
-SQLite audit + runtime events:              implemented (12 tables, WAL, append-only, schema validation audit)
+SQLite audit (full):                        implemented (audit_events on all 3 schema validation stages:
+                                            input, output, wrapper — each with task_id, request_id,
+                                            expected_schema, errors[])
 Pure review result boundary:                implemented (Reasonix returns semantic-only; Coagent wraps)
 Mock Reasonix backend:                      implemented (instant mock review)
 Real Reasonix ACP backend:                  implemented (DeepSeek models over ACP protocol)
-Reasonix ACP contract tests:                implemented (5 fake stdio ACP scenarios + multi-step task test)
+ACP contract tests:                         implemented (5 fake stdio + multi-step task + P2 integration)
 ```
 
 ## Verification
