@@ -26,7 +26,7 @@ use backends::{
     mock::PureReviewResult,
     AgentBackend,
 };
-use tools::tool_spec::{ToolSpec, ToolSpecRegistry};
+use tools::tool_spec::ToolSpecRegistry;
 use config::Config;
 use pipeline::{ArtifactPaths, ExecutorContext, RuntimeToolExecutor, ValidationError};
 use tools::review_diff::{CoagentReviewWrapper, ReviewDiffInput, ReviewMetadata};
