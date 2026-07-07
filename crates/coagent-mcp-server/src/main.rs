@@ -39,7 +39,7 @@ struct CoagentServer {
 #[tool_router]
 impl CoagentServer {
     #[tool(
-        name = "reasonix.review_diff",
+        name = "coagent.review_diff",
         description = "Review a prepared diff through the Coagent runtime gate."
     )]
     async fn review_diff(
@@ -124,7 +124,7 @@ impl CoagentServer {
                         task_id: String::new(), // filled by executor from IDs
                         request_id: String::new(), // filled by executor from IDs
                         status: "ok".into(),
-                        operation: "reasonix.review_diff".into(),
+                        operation: "coagent.review_diff".into(),
                         runtime_decision: "allow".into(),
                     },
                 },

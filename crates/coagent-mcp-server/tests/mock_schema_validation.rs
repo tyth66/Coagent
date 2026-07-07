@@ -1,4 +1,4 @@
-use std::{
+﻿use std::{
     fs,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
@@ -52,7 +52,7 @@ async fn invalid_schema_input_is_rejected_before_mock_backend_success() {
         "id": 2,
         "method": "tools/call",
         "params": {
-            "name": "reasonix.review_diff",
+            "name": "coagent.review_diff",
             "arguments": {
                 "schema_version": "review_diff_input_v1",
                 "task_id": "TASK-invalid-schema",

@@ -1,4 +1,4 @@
-// Integration test: full review_diff round-trip with Reasonix backend.
+﻿// Integration test: full review_diff round-trip with Reasonix backend.
 // Run: cargo test -p coagent-mcp-server --test reasonix_integration -- --ignored --nocapture
 
 use std::time::Instant;
@@ -97,7 +97,7 @@ async fn reasonix_real_review_diff() {
     let request = serde_json::json!({
         "jsonrpc": "2.0", "id": 2, "method": "tools/call",
         "params": {
-            "name": "reasonix.review_diff",
+            "name": "coagent.review_diff",
             "arguments": {
                 "schema_version": "review_diff_input_v1",
                 "task_id": task_id,
