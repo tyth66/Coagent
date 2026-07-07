@@ -3,7 +3,7 @@
 This document captures the architectural vision for upgrading Coagent from a
 Reasonix-specific adapter into a general-purpose multi-agent ACP runtime.
 
-**Status: Blueprint — not yet implemented.**
+**Status: Phase 1-3 implemented (2026-07-07). Phase 4-5 pending.**
 
 ---
 
@@ -264,6 +264,16 @@ mcp-server does not manage sessions directly.
 tools do not write audit directly.
 executor orchestrates everything.
 ```
+
+## Implementation Progress
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| Phase 1 | `AgentBackend` trait, `BackendRequest/Response`, `BackendRegistry`, `AgentProfile`, `AcpBackend` | ✅ DONE (ad279fe) |
+| Phase 2 | `ToolSpec` declarative registration, `ToolSpecRegistry`, capability-based backend selection | ✅ DONE (44d98b6) |
+| Phase 3 | Wire `Arc<dyn AgentBackend>` into `RuntimeToolExecutor` pipeline; `main.rs` builds backends via trait | ✅ DONE (934c6c1) |
+| Phase 4 | `Task/Operation/Attempt` 3-layer state, `operation_attempts` table | ⬜ Pending |
+| Phase 5 | `BackendSelector`, multi-backend fallback, health scoring | ⬜ Pending |
 
 ## Recommended Evolution Path
 

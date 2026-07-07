@@ -82,6 +82,9 @@ SQLite audit (full):                        implemented (audit_events on all 3 s
 Pure review result boundary:                implemented (Reasonix returns semantic-only; Coagent wraps)
 Mock Reasonix backend:                      implemented (instant mock review)
 Real Reasonix ACP backend:                  implemented (DeepSeek models over ACP protocol)
+AgentBackend trait:                        implemented (AgentBackend, BackendRequest/Response,
+                                            BackendRegistry, AcpBackend, MockBackend)
+ToolSpec registry:                          implemented (declarative tool registration + capability tags)
 ACP contract tests:                         implemented (5 fake stdio + multi-step task + P2 integration)
 ```
 
