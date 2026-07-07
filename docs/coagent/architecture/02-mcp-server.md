@@ -1,4 +1,4 @@
-# MCP Server (rmcp) — v2.1
+﻿# MCP Server (rmcp) — v2.1
 
 The MCP server is built with `rmcp` (official Rust MCP SDK, 14.7M downloads).
 
@@ -96,6 +96,45 @@ Embedded `schemas/coagent-v1.schema.json` defines:
 and `request_id`. Pipeline returns `invalid_params` if missing. Default
 `false` preserves backward compatibility with auto-generated UUIDs.
 
+
+## Tool Name (v3)
+
+The MCP tool is registered as `coagent.review_diff`. The legacy name
+`reasonix.review_diff` is preserved as a ToolRegistry alias for backward
+compatibility.
+
+## Tool Specification (v3)
+
+Tools are defined declaratively via `ToolSpec`. The default `ToolSpecRegistry`
+contains:
+
+```
+coagent.review_diff
+  input_schema: review_diff_input_v1
+  output_schema: review_result_v1
+  permission: L1_DIFF_REVIEW
+  required_capability: code.review.diff
+  default_backend: mock
+```
+
+## Backend Registry (v3)
+
+Backends implement the `AgentBackend` trait and are registered in
+`BackendRegistry`:
+
+```rust
+backend_registry.register(Box::new(MockBackend::new("mock")));
+backend_registry.register(Box::new(AcpBackend::new("reasonix", model, cwd)));
+```
+
+Selection is capability-based via `BackendSelector`.
+
+## Attempt Recording (v3)
+
+Each backend invocation is tracked in the `operation_attempts` table.
+The kernel API (`start_attempt` / `complete_attempt` / `fail_attempt`)
+is available and will be wired into the pipeline for per-operation
+attempt lifecycle management.
 ## Deployment
 
 ```powershell

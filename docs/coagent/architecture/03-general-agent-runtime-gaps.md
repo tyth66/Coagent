@@ -1,4 +1,4 @@
-# General Agent Runtime Gaps (v2 — partially resolved)
+﻿# General Agent Runtime Gaps (ARCHIVED — all resolved in v2.1)`r`n`r`n# General Agent Runtime Gaps (v2 — partially resolved)
 
 Coagent v1 was a constrained v1 gateway: one MCP tool, one primary operation, a
 narrow runtime gate, and an audit-backed review workflow. The v2 architecture

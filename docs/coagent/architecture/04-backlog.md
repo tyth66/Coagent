@@ -1,4 +1,4 @@
-# Architecture Backlog — v2.1 Issues
+﻿# Architecture Backlog (ARCHIVED — all 8 issues resolved)`r`n`r`n# Architecture Backlog — v2.1 Issues
 
 Eight concrete issues identified during Reasonix review testing and code audit
 (2026-07-07). These are implementation-level defects in the current v2

@@ -1,48 +1,64 @@
-# Coagent Collaboration Model
+# Coagent Collaboration Model (v3)
 
-Coagent connects two agent systems without merging their responsibilities:
+Coagent is a local multi-agent ACP runtime layer between Codex and external
+intelligent agents. It owns tool registration, task/operation/attempt state,
+permission gating, context projection, ACP session management, backend
+selection, audit, and recovery.
 
 ```
-Codex   = assigns work and makes the final decision
-Coagent = performs safe protocol translation, runtime gating, and audit
-Reasonix = completes the delegated expert task
-Codex   = evaluates the result and decides the next step
+Codex    = assigns work, selects tools, makes final decisions
+Coagent  = tool registration, runtime gating, backend selection,
+           context projection, audit, session recovery
+Backend  = ACP-compatible agent (Reasonix, Mock, or any ACP agent)
+           that executes delegated expert tasks
 ```
 
-## Architecture (Rust, single binary)
+## Architecture
 
 ```
 Codex MCP Host
   -> coagent-mcp-server.exe (Rust, ~5 MB)
-      ├── rmcp crate  (MCP protocol: initialize, tools/list, tools/call)
-      ├── RuntimeKernel (same-process state + policy + audit)
-      │     └── SQLite (append-only, .agent/coagent.sqlite)
-      └── Backend (pluggable)
-            ├── Mock      — instant mock review
-            └── Reasonix  — ACP protocol → DeepSeek models
+      ├── Pipeline         RuntimeToolExecutor — 8-stage unified execution
+      ├── ToolRegistry     ToolSpec-based declarative tool registration
+      ├── RuntimeKernel    same-process state machine + policy engine + SQLite audit
+      │   ├── 10-state FSM queued/running/blocked/waiting-approval/retrying/
+      │   │               partially-completed/completed/failed/cancelled
+      │   ├── Per-operation steps (multi-op tasks via complete_task())
+      │   ├── operation_attempts table (3-layer task/operation/attempt)
+      │   ├── PolicyEngine dynamic ToolRegistry + approval gates + path sandbox
+      │   ├── ContextProjection full input-to-prompt projection (9 fields)
+      │   └── Audit SQLite 13 tables, WAL, append-only, schema audit on all stages
+      ├── BackendRegistry  AgentBackend trait + capability-based selection
+      │   ├── AcpBackend   Reasonix ACP (session recovery: reconnect+retry)
+      │   └── MockBackend  instant pass review
+      └── BackendSelector  DefaultBackendSelector / PreferredBackendSelector
 ```
 
 ## Role Boundaries
 
 ### Codex
 - Owns user intent, planning, workspace changes, final decision
-- Calls `reasonix.review_diff` through MCP but owns the workflow
+- Calls `coagent.review_diff` through MCP but owns the workflow
 
 ### Coagent
-- MCP tool surface: `reasonix.review_diff`
-- Runtime gate: state machine (Created→Running→Completed/Failed/Cancelled)
-- Policy engine: operation, permission level, path allowlist/denylist, network
-- SQLite append-only audit and runtime events (12 tables, WAL, foreign keys)
-- Context projection (future), result validation, error taxonomy
+- MCP tool surface: `coagent.review_diff`
+- Pipeline: schema validation → ID enforcement → runtime gate →
+  backend selection → backend invoke → output validation → lifecycle close
+- Runtime state: task/operation/attempt 3-layer FSM
+- Policy engine: operation, permission, approval, path sandbox
+- SQLite append-only audit on all pipeline stages
+- Context projection from MCP input to backend prompt
+- ACP session management with reconnect+retry
 
-### Reasonix
-- Delegated expert task: diff review only
-- Returns pure review result (verdict, summary, findings, tests_to_run, etc.)
-- Must NOT return Coagent runtime metadata (task_id, request_id, status)
+### Backend
+- Implements `AgentBackend` trait: `invoke(BackendRequest) → BackendResponse`
+- Must return structured, schema-validated responses
+- Must NOT return Coagent runtime metadata
 
 ## Current Scope
 
-One tool: `reasonix.review_diff`
+One MCP tool: `coagent.review_diff` (with `reasonix.review_diff` legacy alias)
 
-Out of scope until v1 boundary is complete: propose_patch, apply_patch,
-human approval, remote transport, additional Reasonix tools.
+Multi-backend, multi-tool, and multi-session patterns are designed
+(via AgentBackend trait, ToolSpec, BackendRegistry) and ready for
+expansion — adding a new tool requires only a `ToolSpec` definition.

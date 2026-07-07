@@ -1,4 +1,4 @@
-# Runtime: State, Policy, Audit (v2.1)
+﻿# Runtime: State, Policy, Audit (v2.1)
 
 The Rust RuntimeKernel runs in-process inside the MCP server binary.
 No JSON-RPC subprocess.
@@ -193,6 +193,58 @@ task_id/request_id to ensure audit completeness even for pre-gate errors.
 - `runtime_steps` + `runtime_events` — per-operation execution records
 - `schema_validation_results`, `policy_evaluation_results` — table exists, wired via kernel APIs
 
+
+## Tool Specification (v3)
+
+Tools are registered declaratively via `ToolSpec`:
+
+```rust
+pub struct ToolSpec {
+    pub name: String,              // "coagent.review_diff"
+    pub version: String,
+    pub input_schema: String,      // SchemaRegistry $defs key
+    pub output_schema: String,
+    pub permission_level: PermissionLevel,
+    pub read_paths: Vec<String>,
+    pub write_paths: Vec<String>,
+    pub required_capability: String,  // "code.review.diff"
+    pub default_backend_id: String,   // "mock"
+}
+```
+
+`ToolSpecRegistry` manages all registered tools. The default registry
+contains `coagent.review_diff`. Adding a new tool = adding a `ToolSpec`
+entry — no handler code duplication.
+
+## Backend Selection (v3)
+
+`BackendSelector` trait enables capability-based backend routing:
+
+```rust
+pub trait BackendSelector {
+    fn select(&self, capability: &str, default: &str, available: &[&dyn AgentBackend]) -> String;
+}
+```
+
+- `DefaultBackendSelector`: matches by capability tag, falls back to default
+- `PreferredBackendSelector`: explicit preferred/fallback order
+
+Selection happens at server startup. Per-operation backend selection
+is designed but not yet wired.
+
+## Attempt Layer (v3)
+
+`operation_attempts` SQLite table tracks each backend invocation:
+
+```
+TASK-001:
+  OP-001 (coagent.review_diff):
+    ATTEMPT-1: reasonix → succeeded
+    ATTEMPT-2: reasonix → protocol error → retry → succeeded
+```
+
+Kernel API: `start_attempt()` → `complete_attempt()` / `fail_attempt()`.
+Attempt recording in the execution pipeline is the next integration step.
 ## Lifecycle API
 
 ```rust
