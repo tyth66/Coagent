@@ -7,7 +7,7 @@ architecture, distinct from the high-level gaps tracked in
 
 ---
 
-## P1 — Handler Pipeline: review_diff handler is a 180-line monolithic function
+## P1 — Handler Pipeline: review_diff handler extracted into RuntimeToolExecutor ✓ RESOLVED (2026-07-07)
 
 **Current state**: `main.rs` `review_diff()` handles 9 distinct responsibilities
 inline: input validation, UUID generation, artifact path collection, kernel gate,
@@ -33,11 +33,11 @@ RuntimeToolExecutor::execute(
 Each MCP tool handler becomes declarative — it only defines operation_name,
 input_schema, permission_level, artifact_plan, backend_prompt_builder, output_schema.
 
-**Scope**: `main.rs` refactor + new `pipeline` module in `coagent-mcp-server`.
+**Resolution**: `pipeline/mod.rs` implements `RuntimeToolExecutor::execute()` with 8 stages: validate input → generate IDs → runtime gate (Allow/Deny/RequireApproval) → invoke backend → validate output → build wrapper → validate wrapper schema → serialize response. Each tool handler becomes a ~30-line declarative wrapper. `main.rs` reduced from 180 lines to ~50 lines per handler.
 
 ---
 
-## P2 — State Machine: task-level vs operation-level confusion
+## P2 — State Machine: two-layer split ✓ RESOLVED (2026-07-07)
 
 **Current state**: The 10-state FSM treats `Completed` as a task terminal state.
 `RuntimeKernel::complete_operation()` sets the task to `Completed`, after which
@@ -62,7 +62,7 @@ OperationState (per-tool-call):
 - A separate `complete_task()` transitions TaskState to Completed
 - `runtime_steps` table already tracks per-operation records; OperationState formalizes this
 
-**Scope**: `state/mod.rs`, `kernel/mod.rs`, `storage/mod.rs`, all callers.
+**Resolution**: `complete_operation()` no longer transitions the task to Completed — it only closes the runtime step and writes `operation_completed` audit events. New `complete_task()` method handles task-level terminal transitions. `evaluate_state()` only rejects Cancelled tasks (truly dead); Completed/Failed tasks can accept new operations. This enables multi-step task patterns (review_architecture → review_diff → verify_tests under one task_id).
 
 ---
 
@@ -122,7 +122,7 @@ constraints explicitly. Budget fields should be passed as instructions
 
 ---
 
-## P5 — Finding Type Safety: findings field is Vec<serde_json::Value>
+## P5 — Finding Type Safety: strong Rust types ✓ RESOLVED (2026-07-07)
 
 **Current state**: `PureReviewResult.findings` is `Vec<serde_json::Value>`.
 The `validate()` method only checks verdict/summary/confidence at the top level.
@@ -156,7 +156,7 @@ Validation: Rust `Finding::validate()` checks all fields + JSON Schema check
 for schema-level constraints. Dual-layer validation makes Coagent's output
 boundary genuinely trustworthy.
 
-**Scope**: `backends/mock.rs`, `tools/review_diff.rs`, `schemas/coagent-v1.schema.json`.
+**Resolution**: `Finding` struct with typed `Severity` enum (Blocker/Major/Minor/Note) replaces `Vec<serde_json::Value>`. `PureReviewResult::validate()` now checks issue non-empty, category non-empty, and confidence 0.0-1.0 per finding. JSON Schema provides second-layer validation. Dual-layer: Rust types catch structural errors at deserialization; schema catches enum value mismatches.
 
 ---
 
@@ -250,9 +250,9 @@ but not `policy_evaluation_results`. The audit trail has gaps.
 
 | # | Issue | Impact | Effort | Priority |
 |---|-------|--------|--------|----------|
-| P1 | Handler pipeline monolithic | D1 — blocks multi-tool | 2-3h | **HIGH** |
-| P2 | State machine flat | D2 — blocks multi-op tasks | 2-3h | **HIGH** |
-| P5 | Findings type-unsafe | D3 — weakens output trust | 30m | **HIGH** |
+| P1 | Handler pipeline monolithic | ✓ RESOLVED — RuntimeToolExecutor | 2-3h | DONE |
+| P2 | State machine flat | ✓ RESOLVED — two-layer TaskState+OperationState | 2-3h | DONE |
+| P5 | Findings type-unsafe | ✓ RESOLVED — strong Finding + Severity types | 30m | DONE |
 | P4 | Context projection missing | D4 — wastes schema fields | 1h | MEDIUM |
 | P7 | ACP session no recovery | D5 — production reliability | 1h | MEDIUM |
 | P3 | ID orchestration control | D6 — Codex integration gap | 30m | LOW |

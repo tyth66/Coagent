@@ -1,4 +1,4 @@
-﻿use std::path::PathBuf;
+use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -147,13 +147,36 @@ impl RuntimeKernel {
         })?)
     }
 
-    /// Transition task to Completed and write audit.
+    /// Close an operation step as completed. Does NOT transition the task to terminal.
+    /// The task remains in its current state, allowing multiple operations per task.
+    /// Use complete_task() for task-level terminal transitions (P2: two-layer state machine).
     pub fn complete_operation(
         &mut self,
         task_id: &str,
         request_id: Option<&str>,
         operation: &str,
     ) -> Result<TaskStateValue, RuntimeError> {
+        let state = self.load_or_create_task_state(task_id);
+
+        let audit = AuditEventInput {
+            task_id: task_id.to_string(),
+            event_type: "operation_completed".to_string(),
+            summary: format!("Operation {operation} completed for task {task_id}"),
+            payload_json: json!({
+                "task_id": task_id,
+                "request_id": request_id,
+                "operation": operation
+            })
+            .to_string(),
+        };
+        self.store.write_audit_event(&audit)?;
+        self.close_runtime_step(task_id, request_id, operation, "completed")?;
+        Ok(state.value())
+    }
+
+    /// Transition the task itself to Completed (terminal).
+    /// This is separate from complete_operation() to support multi-operation tasks.
+    pub fn complete_task(&mut self, task_id: &str) -> Result<TaskStateValue, RuntimeError> {
         let mut state = self.load_or_create_task_state(task_id);
         state
             .transition_to(TaskStateValue::Completed)
@@ -162,21 +185,16 @@ impl RuntimeKernel {
         let audit = AuditEventInput {
             task_id: task_id.to_string(),
             event_type: "task_completed".to_string(),
-            summary: format!("Task {task_id} completed for {operation}"),
-            payload_json: json!({
-                "task_id": task_id,
-                "request_id": request_id,
-                "operation": operation
-            })
-            .to_string(),
+            summary: format!("Task {task_id} completed"),
+            payload_json: json!({ "task_id": task_id }).to_string(),
         };
         self.store
             .transition_state_with_audit(task_id, TaskStateValue::Completed, &audit)?;
-        self.close_runtime_step(task_id, request_id, operation, "completed")?;
         Ok(TaskStateValue::Completed)
     }
 
-    /// Transition task to Failed, write audit with error info.
+    /// Mark an operation step as failed. Does NOT transition the task to terminal.
+    /// The task remains in its current state, allowing retry or other operations.
     pub fn fail_operation(
         &mut self,
         task_id: &str,
@@ -185,15 +203,12 @@ impl RuntimeKernel {
         error_code: &str,
         error_message: &str,
     ) -> Result<TaskStateValue, RuntimeError> {
-        let mut state = self.load_or_create_task_state(task_id);
-        state
-            .transition_to(TaskStateValue::Failed)
-            .map_err(|e| RuntimeError::Store(StoreError::InvalidTaskState(format!("{e:?}"))))?;
+        let state = self.load_or_create_task_state(task_id);
 
         let audit = AuditEventInput {
             task_id: task_id.to_string(),
-            event_type: "task_failed".to_string(),
-            summary: format!("Task {task_id} failed ({error_code}): {error_message}"),
+            event_type: "operation_failed".to_string(),
+            summary: format!("Operation {operation} failed ({error_code}): {error_message}"),
             payload_json: json!({
                 "task_id": task_id,
                 "request_id": request_id,
@@ -203,10 +218,9 @@ impl RuntimeKernel {
             })
             .to_string(),
         };
-        self.store
-            .transition_state_with_audit(task_id, TaskStateValue::Failed, &audit)?;
+        self.store.write_audit_event(&audit)?;
         self.close_runtime_step(task_id, request_id, operation, "failed")?;
-        Ok(TaskStateValue::Failed)
+        Ok(state.value())
     }
 
     fn load_or_create_task_state(&self, task_id: &str) -> TaskState {
@@ -235,21 +249,14 @@ impl RuntimeKernel {
 
     fn evaluate_state(&self, task_id: &str) -> (RuntimeDecisionValue, Vec<String>, TaskState) {
         match self.store.load_task_state(task_id) {
-            Ok(state)
-                if matches!(
-                    state.value(),
-                    TaskStateValue::Completed | TaskStateValue::Failed | TaskStateValue::Cancelled
-                ) =>
-            {
-                (
-                    RuntimeDecisionValue::Deny,
-                    vec![format!(
-                        "task {task_id} is in terminal state {:?}",
-                        state.value()
-                    )],
-                    state,
-                )
-            }
+            // Only Cancelled is truly terminal for tasks.
+            // Completed/Failed tasks can still accept new operations
+            // in the multi-step task pattern (P2: two-layer state machine).
+            Ok(state) if matches!(state.value(), TaskStateValue::Cancelled) => (
+                RuntimeDecisionValue::Deny,
+                vec![format!("task {task_id} is cancelled")],
+                state,
+            ),
             Ok(state) => (RuntimeDecisionValue::Allow, Vec::new(), state),
             Err(StoreError::TaskStateNotFound(_)) => (
                 RuntimeDecisionValue::Allow,

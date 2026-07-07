@@ -220,7 +220,7 @@ fn kernel_closes_runtime_step_when_policy_denies() {
 fn state_denial_beats_policy_allow() {
     let repo = temp_repo("state-deny");
     let store = RuntimeStore::initialize(&repo).expect("initialize store");
-    let terminal = TaskState::restore("TASK-state-deny", TaskStateValue::Completed, 0);
+    let terminal = TaskState::restore("TASK-state-deny", TaskStateValue::Cancelled, 0);
     store
         .upsert_task_state(&terminal)
         .expect("persist terminal state");
@@ -235,7 +235,7 @@ fn state_denial_beats_policy_allow() {
         decision
             .reasons
             .iter()
-            .any(|reason| reason.contains("terminal"))
+            .any(|reason| reason.contains("cancelled"))
     );
 }
 

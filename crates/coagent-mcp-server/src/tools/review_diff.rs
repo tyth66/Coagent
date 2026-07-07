@@ -62,15 +62,13 @@ pub struct ValidationError {
 impl ReviewDiffInput {
     /// Delegates to the SchemaRegistry-based validation done in the MCP server pipeline.
     /// Kept for backward compatibility; always returns Ok since schema validation is authoritative.
-    pub fn validate(&self) -> Result<(), ValidationError> {
-        // SchemaRegistry::validate("review_diff_input_v1", payload) is the single authority.
-        // Handwritten checks removed in Phase 5 (schema unification).
+    #[allow(dead_code)]
+    fn validate(&self) -> Result<(), ValidationError> {
         Ok(())
     }
 }
 
 // ── Output validation ──
-
 impl PureReviewResult {
     pub fn validate(&self) -> Result<(), ValidationError> {
         if !matches!(
@@ -93,6 +91,26 @@ impl PureReviewResult {
                 path: "/confidence".into(),
                 message: "confidence must be between 0 and 1".into(),
             });
+        }
+        for (i, finding) in self.findings.iter().enumerate() {
+            if finding.issue.is_empty() {
+                return Err(ValidationError {
+                    path: format!("/findings/{i}/issue"),
+                    message: "issue must be non-empty".into(),
+                });
+            }
+            if finding.category.is_empty() {
+                return Err(ValidationError {
+                    path: format!("/findings/{i}/category"),
+                    message: "category must be non-empty".into(),
+                });
+            }
+            if !(0.0..=1.0).contains(&finding.confidence) {
+                return Err(ValidationError {
+                    path: format!("/findings/{i}/confidence"),
+                    message: "confidence must be between 0 and 1".into(),
+                });
+            }
         }
         Ok(())
     }

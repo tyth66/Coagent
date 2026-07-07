@@ -92,7 +92,8 @@ fn full_fsm_lifecycle_queued_to_completed_with_blocked() {
     // 6. Complete
     kernel
         .complete_operation("TASK-full", Some("REQ-full-1"), "reasonix.review_diff")
-        .expect("complete");
+        .expect("complete operation");
+    kernel.complete_task("TASK-full").expect("complete task");
 
     let final_state = store.load_task_state("TASK-full").expect("final");
     assert_eq!(final_state.value(), TaskStateValue::Completed);
@@ -265,7 +266,8 @@ fn approval_gate_produces_require_approval_and_allows_resume() {
     // Now complete
     kernel
         .complete_operation("TASK-approve", Some("REQ-approve-1"), "agent.protected_op")
-        .expect("complete after approval");
+        .expect("complete operation");
+    kernel.complete_task("TASK-approve").expect("complete task");
 
     assert_eq!(
         store.load_task_state("TASK-approve").unwrap().value(),
@@ -656,6 +658,7 @@ fn multiple_tasks_maintain_independent_state_and_events() {
     kernel
         .complete_operation("TASK-A", Some("REQ-A"), "reasonix.review_diff")
         .unwrap();
+    kernel.complete_task("TASK-A").unwrap();
 
     // Task B: Allow + Complete
     kernel.evaluate_operation(RuntimeOperationRequest {
@@ -672,6 +675,7 @@ fn multiple_tasks_maintain_independent_state_and_events() {
     kernel
         .complete_operation("TASK-B", Some("REQ-B"), "reasonix.review_diff")
         .unwrap();
+    kernel.complete_task("TASK-B").unwrap();
 
     // Task C: Denied
     let denied = kernel.evaluate_operation(RuntimeOperationRequest {
