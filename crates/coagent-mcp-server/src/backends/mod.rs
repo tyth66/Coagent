@@ -1,4 +1,5 @@
 ﻿pub mod acp_backend;
+pub mod acp_client;
 pub mod agent_profile;
 pub mod backend_trait;
 

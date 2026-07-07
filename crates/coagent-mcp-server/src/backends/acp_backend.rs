@@ -35,39 +35,47 @@ impl AcpBackend {
 
 #[async_trait]
 impl AgentBackend for AcpBackend {
-    async fn invoke(&self, request: BackendRequest) -> Result<BackendResponse, BackendError> {
-        let goal = &request.goal;
-        let diff_path = request
-            .context
-            .get("diff_path")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let context = crate::backends::context::ContextProjection::from_input(
-            goal.clone(),
-            diff_path.to_string(),
-            request.context.get("context_path").and_then(|v| v.as_str()).map(String::from),
-            request.context.get("test_log_path").and_then(|v| v.as_str()).map(String::from),
-            request.context.get("build_log_path").and_then(|v| v.as_str()).map(String::from),
-            request.context.get("focus").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default(),
-            request.context.get("constraints").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default(),
-            request.context.get("base_branch").and_then(|v| v.as_str()).map(String::from),
-            request.context.get("working_branch").and_then(|v| v.as_str()).map(String::from),
+        async fn invoke(&self, request: BackendRequest) -> Result<BackendResponse, BackendError> {
+        // Build prompt from context.
+        let diff_path = request.context.get("diff_path").and_then(|v| v.as_str()).unwrap_or("");
+        let prompt = format!(
+            "GOAL: {}
+DIFF PATH: {}
+
+Analyze the diff and return your review as JSON.",
+            request.goal, diff_path,
         );
 
-        let review = self
-            .runner
-            .run(goal, diff_path, &context)
+        let mut client = super::acp_client::AcpClient::connect(
+            &self.profile.command,
+            &self.profile.args,
+            &self.profile.cwd,
+        )
+        .await
+        .map_err(|e| BackendError::Unavailable(e.to_string()))?;
+
+        let text = client
+            .send_prompt(&prompt, self.profile.timeout_ms)
             .await
             .map_err(|e| match e {
-                ReasonixError::Spawn(msg) | ReasonixError::Io(msg) => {
+                super::acp_client::AcpClientError::Spawn(msg) | super::acp_client::AcpClientError::Io(msg) => {
                     BackendError::Unavailable(msg)
                 }
-                ReasonixError::Protocol(msg) => BackendError::Protocol(msg),
-                ReasonixError::Timeout(_msg) => BackendError::Timeout,
+                super::acp_client::AcpClientError::Protocol(msg) => BackendError::Protocol(msg),
+                super::acp_client::AcpClientError::Timeout(_msg) => BackendError::Timeout,
             })?;
 
-        let payload = serde_json::to_value(&review)
-            .map_err(|e| BackendError::Protocol(format!("serialization: {e}")))?;
+        let payload: serde_json::Value = serde_json::from_str(&text)
+            .or_else(|_| {
+                text.find('{')
+                    .and_then(|start| {
+                        let slice = &text[start..];
+                        slice.rfind('}').map(|end| &slice[..=end])
+                    })
+                    .and_then(|json_str| serde_json::from_str(json_str).ok())
+                    .ok_or_else(|| BackendError::Protocol("unparseable response".into()))
+            })
+            .map_err(|e: BackendError| e)?;
 
         Ok(BackendResponse {
             output_schema: request.output_schema.clone(),
