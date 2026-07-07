@@ -1,10 +1,12 @@
-# Coagent Documentation
+﻿# Coagent Documentation
 
 ## Architecture (v3)
 
 - [Collaboration Model](architecture/00-collaboration-model.md) — Current v3 architecture
 - [Runtime: State, Policy, Audit](architecture/01-runtime.md) — Pipeline, ToolSpec, Attempts, Audit
 - [MCP Server](architecture/02-mcp-server.md) — Tool registration, BackendRegistry, Deployment
+
+- [v3.1 Roadmap](architecture/06-v3.1-roadmap.md) — Runtime behavior completion plan
 
 ## Historical
 

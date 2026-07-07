@@ -107,5 +107,6 @@ cargo clippy --workspace -- -D warnings
 - [MCP Server (rmcp)](docs/coagent/architecture/02-mcp-server.md)
 - [General Agent Runtime Gaps](docs/coagent/architecture/03-general-agent-runtime-gaps.md)
 - [Architecture Backlog](docs/coagent/architecture/04-backlog.md) — All 8 issues resolved
+- [v3.1 Roadmap](docs/coagent/architecture/06-v3.1-roadmap.md) — Runtime behavior gaps
 - [v3 Blueprint](docs/coagent/architecture/05-v3-blueprint.md) — Multi-agent ACP runtime vision
 - [Documentation Index](docs/coagent/README.md)
