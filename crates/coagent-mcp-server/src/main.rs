@@ -19,7 +19,12 @@ mod config;
 mod pipeline;
 mod tools;
 
-use backends::{Backend, context::ContextProjection, mock::PureReviewResult};
+use backends::{
+    acp_backend::AcpBackend,
+    context::ContextProjection,
+    mock::PureReviewResult,
+    AgentBackend,
+};
 use config::Config;
 use pipeline::{ArtifactPaths, ExecutorContext, RuntimeToolExecutor, ValidationError};
 use tools::review_diff::{CoagentReviewWrapper, ReviewDiffInput, ReviewMetadata};
@@ -77,16 +82,30 @@ impl CoagentServer {
                 &input,
                 artifact_paths,
                 // Backend call closure
-                |backend| {
+                |backend: std::sync::Arc<dyn AgentBackend>| {
                     let ctx = context.clone();
+                    let output_schema = "review_result_v1".to_string();
                     async move {
-                        match backend {
-                            Backend::Mock => Ok(PureReviewResult::mock_pass()),
-                            Backend::Reasonix(runner) => runner
-                                .run(&ctx.goal, &ctx.diff_path, &ctx)
-                                .await
-                                .map_err(|e| e.to_string()),
-                        }
+                        let request = crate::backends::BackendRequest {
+                            goal: ctx.goal.clone(),
+                            operation: "coagent.review_diff".into(),
+                            output_schema: output_schema.clone(),
+                            read_paths: vec![ctx.diff_path.clone()],
+                            context: serde_json::json!({
+                                "diff_path": ctx.diff_path,
+                                "context_path": ctx.context_path,
+                                "test_log_path": ctx.test_log_path,
+                                "build_log_path": ctx.build_log_path,
+                                "focus": ctx.focus,
+                                "constraints": ctx.constraints,
+                                "base_branch": ctx.base_branch,
+                                "working_branch": ctx.working_branch,
+                            }),
+                        };
+                        let response = backend.invoke(request).await
+                            .map_err(|e| e.to_string())?;
+                        serde_json::from_value(response.payload)
+                            .map_err(|e| format!("deserialize review: {e}"))
                     }
                 },
                 // Output validation closure
@@ -126,12 +145,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get("reasonix.review_diff")
         .expect("review_diff tool definition")
         .clone();
-    let backend = Backend::from_configured_tool(
-        config.backend_override,
-        &review_tool,
-        &config.reasonix_model,
-        &config.repo_root,
-    );
+    // Build the backend: use the legacy config to select Mock or Reasonix,
+    // wrapping the ReasonixRunner in an AcpBackend implementing AgentBackend.
+    let backend: std::sync::Arc<dyn AgentBackend> = match config.backend_override {
+        Some(crate::config::BackendId::Mock) => {
+            std::sync::Arc::new(backends::acp_backend::MockBackend::new("mock"))
+        }
+        Some(crate::config::BackendId::Reasonix) | None => {
+            // Default to Reasonix (backward compat with COAGENT_BACKEND=reasonix)
+            std::sync::Arc::new(AcpBackend::new(
+                "reasonix",
+                &config.reasonix_model,
+                config.repo_root.clone(),
+            ))
+        }
+    };
 
     let kernel = RuntimeKernel::initialize(RuntimeConfig {
         repo_root: config.repo_root.clone(),

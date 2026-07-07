@@ -12,14 +12,15 @@ use rmcp::{
 use serde::Serialize;
 use tokio::sync::Mutex;
 
-use crate::backends::Backend;
+use crate::backends::AgentBackend;
 
 /// Shared server state passed to the executor pipeline.
 #[derive(Clone)]
 pub struct ExecutorContext {
     pub require_external_ids: bool,
     pub kernel: Arc<Mutex<RuntimeKernel>>,
-    pub backend: Backend,
+    /// The backend selected for this tool invocation.
+    pub backend: Arc<dyn AgentBackend>,
     pub schema_registry: Arc<SchemaRegistry>,
     pub tool: ToolDefinition,
 }
@@ -60,7 +61,7 @@ impl RuntimeToolExecutor {
         request_id: Option<String>,
         input: &I,
         artifact_paths: ArtifactPaths,
-        backend_call: impl FnOnce(Backend) -> BFut,
+        backend_call: impl FnOnce(std::sync::Arc<dyn AgentBackend>) -> BFut,
         validate_output: impl FnOnce(&O) -> Result<(), ValidationError>,
         build_wrapper: impl FnOnce(O) -> W,
     ) -> Result<CallToolResult, ErrorData>
