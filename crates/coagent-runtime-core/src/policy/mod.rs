@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -235,32 +235,35 @@ impl ToolRegistry {
     /// Enable a previously disabled tool.
     pub fn enable(&self, operation: &str) -> bool {
         if let Ok(mut tools) = self.tools.write()
-            && let Some(tool) = tools.get_mut(operation) {
-                tool.enabled = true;
-                return true;
-            }
+            && let Some(tool) = tools.get_mut(operation)
+        {
+            tool.enabled = true;
+            return true;
+        }
         false
     }
 
     /// Disable a tool (no-op if already disabled). Does not remove from registry.
     pub fn disable(&self, operation: &str) -> bool {
         if let Ok(mut tools) = self.tools.write()
-            && let Some(tool) = tools.get_mut(operation) {
-                tool.enabled = false;
-                return true;
-            }
+            && let Some(tool) = tools.get_mut(operation)
+        {
+            tool.enabled = false;
+            return true;
+        }
         false
     }
 
     /// Update a tool definition in-place (version bump). Returns old version.
     pub fn upgrade(&self, mut tool: ToolDefinition) -> Option<u32> {
         if let Ok(mut tools) = self.tools.write()
-            && let Some(existing) = tools.get(&tool.operation) {
-                tool.version = existing.version + 1;
-                let old_version = existing.version;
-                tools.insert(tool.operation.clone(), tool);
-                return Some(old_version);
-            }
+            && let Some(existing) = tools.get(&tool.operation)
+        {
+            tool.version = existing.version + 1;
+            let old_version = existing.version;
+            tools.insert(tool.operation.clone(), tool);
+            return Some(old_version);
+        }
         None
     }
 

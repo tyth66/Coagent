@@ -34,9 +34,10 @@ pub fn replay_task_state(
         );
 
         if let Some(seen_seq) = idempotency_seen.get(&idem_key)
-            && event.task_sequence <= *seen_seq {
-                continue;
-            }
+            && event.task_sequence <= *seen_seq
+        {
+            continue;
+        }
         idempotency_seen.insert(idem_key.clone(), event.task_sequence);
 
         let payload: serde_json::Value =

@@ -3,8 +3,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 /// Execution sandbox configuration: controls what a task can access.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SandboxConfig {
     /// Working directory for the task (relative to repo root or absolute).
     pub working_directory: Option<PathBuf>,
@@ -44,7 +43,6 @@ impl Default for ResourceBudgets {
         }
     }
 }
-
 
 impl SandboxConfig {
     pub fn new() -> Self {
