@@ -1,5 +1,5 @@
 ---
-name: coagent-dev
+name: coagent
 description: Use Coagent to review code diffs through a gated MCP tool with audit and policy enforcement. Use when preparing diffs for review, running reasoned code reviews, interpreting Coagent review results, setting up Coagent MCP server registration, or debugging Coagent review failures.
 ---
 
