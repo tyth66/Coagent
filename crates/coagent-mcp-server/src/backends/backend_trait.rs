@@ -104,6 +104,63 @@ impl BackendRegistry {
     }
 }
 
+
+
+/// Selects a backend for a given tool specification.
+pub trait BackendSelector: Send + Sync {
+    /// Given a tool spec and available backends, pick one.
+    /// Returns the selected backend's ID.
+    fn select(
+        &self,
+        tool_required_capability: &str,
+        tool_default_backend: &str,
+        available: &[&dyn AgentBackend],
+    ) -> String;
+}
+
+/// Simple selector: capability match first, then fallback to default.
+pub struct DefaultBackendSelector;
+
+impl BackendSelector for DefaultBackendSelector {
+    fn select(
+        &self,
+        tool_required_capability: &str,
+        tool_default_backend: &str,
+        available: &[&dyn AgentBackend],
+    ) -> String {
+        // Try capability match first
+        for b in available {
+            if b.capabilities().tags.iter().any(|t| t == tool_required_capability) {
+                return b.backend_id().to_string();
+            }
+        }
+        // Fallback to default
+        tool_default_backend.to_string()
+    }
+}
+
+/// Selector with explicit preference order.
+pub struct PreferredBackendSelector {
+    pub preferred_backend: String,
+    pub fallback_backend: String,
+}
+
+impl BackendSelector for PreferredBackendSelector {
+    fn select(
+        &self,
+        _tool_required_capability: &str,
+        _tool_default_backend: &str,
+        available: &[&dyn AgentBackend],
+    ) -> String {
+        // Try preferred first
+        if available.iter().any(|b| b.backend_id() == self.preferred_backend) {
+            return self.preferred_backend.clone();
+        }
+        // Fallback
+        self.fallback_backend.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -20,11 +20,13 @@ mod pipeline;
 mod tools;
 
 use backends::{
-    acp_backend::AcpBackend,
+    acp_backend::{AcpBackend, MockBackend},
+    backend_trait::{BackendRegistry, BackendSelector, DefaultBackendSelector},
     context::ContextProjection,
     mock::PureReviewResult,
     AgentBackend,
 };
+use tools::tool_spec::{ToolSpec, ToolSpecRegistry};
 use config::Config;
 use pipeline::{ArtifactPaths, ExecutorContext, RuntimeToolExecutor, ValidationError};
 use tools::review_diff::{CoagentReviewWrapper, ReviewDiffInput, ReviewMetadata};
@@ -145,20 +147,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get("reasonix.review_diff")
         .expect("review_diff tool definition")
         .clone();
-    // Build the backend: use the legacy config to select Mock or Reasonix,
-    // wrapping the ReasonixRunner in an AcpBackend implementing AgentBackend.
-    let backend: std::sync::Arc<dyn AgentBackend> = match config.backend_override {
-        Some(crate::config::BackendId::Mock) => {
-            std::sync::Arc::new(backends::acp_backend::MockBackend::new("mock"))
-        }
-        Some(crate::config::BackendId::Reasonix) | None => {
-            // Default to Reasonix (backward compat with COAGENT_BACKEND=reasonix)
-            std::sync::Arc::new(AcpBackend::new(
-                "reasonix",
-                &config.reasonix_model,
-                config.repo_root.clone(),
-            ))
-        }
+    // Build BackendRegistry with available backends
+    let mut backend_registry = BackendRegistry::new();
+    let mock_backend = std::sync::Arc::new(MockBackend::new("mock"));
+    backend_registry.register(Box::new(MockBackend::new("mock")));
+
+    let reasonix_backend: std::sync::Arc<dyn AgentBackend> = std::sync::Arc::new(
+        AcpBackend::new("reasonix", &config.reasonix_model, config.repo_root.clone()),
+    );
+    backend_registry.register(Box::new(AcpBackend::new(
+        "reasonix",
+        &config.reasonix_model,
+        config.repo_root.clone(),
+    )));
+
+    // Build ToolSpec registry
+    let tool_registry = ToolSpecRegistry::default_registry();
+    let tool_spec = tool_registry
+        .get("coagent.review_diff")
+        .expect("coagent.review_diff tool spec");
+
+    // Select backend: capability-based with fallback
+    let selector = DefaultBackendSelector;
+    let selected_id = selector.select(
+        &tool_spec.required_capability,
+        &tool_spec.default_backend_id,
+        &[reasonix_backend.as_ref(), mock_backend.as_ref()],
+    );
+    let backend: std::sync::Arc<dyn AgentBackend> = match selected_id.as_str() {
+        "reasonix" => reasonix_backend,
+        _ => std::sync::Arc::new(MockBackend::new("mock")),
     };
 
     let kernel = RuntimeKernel::initialize(RuntimeConfig {
