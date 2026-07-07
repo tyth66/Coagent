@@ -3,7 +3,7 @@
 This document captures the architectural vision for upgrading Coagent from a
 Reasonix-specific adapter into a general-purpose multi-agent ACP runtime.
 
-**Status: Phase 1-3 implemented (2026-07-07). Phase 4-5 pending.**
+**Status: Phase 1-4 implemented (2026-07-07). Phase 4-5 pending.**
 
 ---
 
