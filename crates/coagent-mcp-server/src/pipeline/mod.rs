@@ -21,6 +21,8 @@ pub struct ExecutorContext {
     pub kernel: Arc<Mutex<RuntimeKernel>>,
     /// The backend selected for this tool invocation.
     pub backend: Arc<dyn AgentBackend>,
+    /// Per-operation backend registry for attempt tracking.
+    pub backend_registry: Option<std::sync::Arc<crate::backends::BackendRegistry>>,
     pub schema_registry: Arc<SchemaRegistry>,
     pub tool: ToolDefinition,
 }

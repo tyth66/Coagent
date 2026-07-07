@@ -189,7 +189,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let executor = RuntimeToolExecutor::new(ExecutorContext {
         require_external_ids: config.require_external_ids,
         kernel: Arc::new(Mutex::new(kernel)),
-        backend,
+        backend: backend.clone(),
+        backend_registry: Some(std::sync::Arc::new(backend_registry)),
         schema_registry: Arc::new(schema_registry),
         tool: review_tool,
     });
