@@ -66,7 +66,7 @@ OperationState (per-tool-call):
 
 ---
 
-## P3 — ID Orchestration: auto-generated task_id/request_id vs Codex-owned IDs
+## P3 — ID Orchestration: COAGENT_REQUIRE_EXTERNAL_IDS ✓ RESOLVED (2026-07-07)
 
 **Current state**: If `task_id` or `request_id` is absent from the MCP call,
 the server auto-generates UUIDs.
@@ -84,11 +84,11 @@ COAGENT_REQUIRE_EXTERNAL_IDS=false → developer convenience: auto-generate miss
 
 Default: `false` (keep backward compatibility).
 
-**Scope**: `config.rs`, `main.rs` ID generation block.
+**Resolution**: `COAGENT_REQUIRE_EXTERNAL_IDS=true` (env var) forces task_id and request_id to be required. Pipeline returns `invalid_params` if missing. Default false preserves backward compatibility. Config struct now carries `require_external_ids: bool`.
 
 ---
 
-## P4 — Context Projection: Reasonix prompt ignores most input fields
+## P4 — Context Projection: full input projection ✓ RESOLVED (2026-07-07)
 
 **Current state**: `build_review_prompt()` receives only `goal` and `diff_path`.
 The `ReviewDiffInput` struct carries focus, constraints, context_path,
@@ -118,7 +118,7 @@ Prompt should instruct Reasonix about available files, focus areas, and
 constraints explicitly. Budget fields should be passed as instructions
 (e.g., "limit your analysis to 5 minutes").
 
-**Scope**: `backends/reasonix.rs`, `tools/review_diff.rs`, `main.rs`.
+**Resolution**: `ContextProjection` struct captures all 9 input fields. `render_context_section()` builds a structured prompt section listing available files, focus areas, and constraints. Prompt template now includes `{context_section}` placeholder. `ReasonixRunner::run()` and `AcpSession::send_prompt()` accept ContextProjection.
 
 ---
 
@@ -187,7 +187,7 @@ protocol path with deterministic responses.
 
 ---
 
-## P7 — ACP Session Recovery: no reconnect on child process failure
+## P7 — ACP Session Recovery: reconnect + retry ✓ RESOLVED (2026-07-07)
 
 **Current state**: `AcpSession` is lazily initialized once and reused.
 If the Reasonix child process crashes, stdout EOFs, or the session expires,
@@ -213,7 +213,7 @@ send_prompt() fails with Io/Protocol/EOF/Timeout
 Audit events: `reasonix_session_restarted`, `reasonix_session_failed`,
 `reasonix_protocol_error`, `reasonix_timeout`.
 
-**Scope**: `backends/reasonix.rs`.
+**Resolution**: `ReasonixError::is_recoverable()` identifies Protocol/Io errors. `ReasonixRunner::run()` catches recoverable errors, drops the dead session, reconnects once, and retries the prompt. Non-recoverable errors propagate immediately.
 
 ---
 
@@ -253,8 +253,8 @@ but not `policy_evaluation_results`. The audit trail has gaps.
 | P1 | Handler pipeline monolithic | ✓ RESOLVED — RuntimeToolExecutor | 2-3h | DONE |
 | P2 | State machine flat | ✓ RESOLVED — two-layer TaskState+OperationState | 2-3h | DONE |
 | P5 | Findings type-unsafe | ✓ RESOLVED — strong Finding + Severity types | 30m | DONE |
-| P4 | Context projection missing | D4 — wastes schema fields | 1h | MEDIUM |
-| P7 | ACP session no recovery | D5 — production reliability | 1h | MEDIUM |
-| P3 | ID orchestration control | D6 — Codex integration gap | 30m | LOW |
-| P6 | Integration test gap | D7 — CI coverage | 2h | LOW |
-| P8 | Audit completeness | D8 — audit trail gaps | 2h | LOW |
+| P4 | Context projection missing | ✓ RESOLVED — ContextProjection + prompt template | 1h | DONE |
+| P7 | ACP session no recovery | ✓ RESOLVED — reconnect + retry on recoverable errors | 1h | DONE |
+| P3 | ID orchestration control | ✓ RESOLVED — COAGENT_REQUIRE_EXTERNAL_IDS | 30m | DONE |
+| P6 | Integration test gap | Unchanged (FakeAcpServer pending) | 2h | LOW |
+| P8 | Audit completeness | Unchanged (tables exist, not all wired) | 2h | LOW |

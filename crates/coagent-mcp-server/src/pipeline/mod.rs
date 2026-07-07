@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use coagent_runtime_core::{
     kernel::{AuditEvent, RuntimeDecisionValue, RuntimeKernel},
@@ -17,6 +17,7 @@ use crate::backends::Backend;
 /// Shared server state passed to the executor pipeline.
 #[derive(Clone)]
 pub struct ExecutorContext {
+    pub require_external_ids: bool,
     pub kernel: Arc<Mutex<RuntimeKernel>>,
     pub backend: Backend,
     pub schema_registry: Arc<SchemaRegistry>,
@@ -82,7 +83,19 @@ impl RuntimeToolExecutor {
             return Err(ErrorData::invalid_params(detail, None));
         }
 
-        // ── Stage 2: Generate IDs ──
+        // ── Stage 2: Generate or enforce IDs ──
+        if self.ctx.require_external_ids && task_id.is_none() {
+            return Err(ErrorData::invalid_params(
+                "task_id is required when COAGENT_REQUIRE_EXTERNAL_IDS=true",
+                None,
+            ));
+        }
+        if self.ctx.require_external_ids && request_id.is_none() {
+            return Err(ErrorData::invalid_params(
+                "request_id is required when COAGENT_REQUIRE_EXTERNAL_IDS=true",
+                None,
+            ));
+        }
         let task_id = task_id.unwrap_or_else(|| format!("TASK-{}", uuid::Uuid::new_v4()));
         let request_id = request_id.unwrap_or_else(|| format!("REQ-{}", uuid::Uuid::new_v4()));
 

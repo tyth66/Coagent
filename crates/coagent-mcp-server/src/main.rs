@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use coagent_runtime_core::{
     kernel::{RuntimeConfig, RuntimeKernel},
@@ -19,7 +19,7 @@ mod config;
 mod pipeline;
 mod tools;
 
-use backends::{Backend, mock::PureReviewResult};
+use backends::{Backend, context::ContextProjection, mock::PureReviewResult};
 use config::Config;
 use pipeline::{ArtifactPaths, ExecutorContext, RuntimeToolExecutor, ValidationError};
 use tools::review_diff::{CoagentReviewWrapper, ReviewDiffInput, ReviewMetadata};
@@ -56,6 +56,19 @@ impl CoagentServer {
         let goal = input.goal.clone();
         let diff_path = input.artifacts.diff_path.clone();
 
+        // Build context projection from all input fields
+        let context = ContextProjection::from_input(
+            goal.clone(),
+            diff_path.clone(),
+            input.artifacts.context_path.clone(),
+            input.artifacts.test_log_path.clone(),
+            input.artifacts.build_log_path.clone(),
+            input.focus.clone(),
+            input.constraints.clone(),
+            input.repo.base_branch.clone(),
+            input.repo.working_branch.clone(),
+        );
+
         // Delegate to the unified executor pipeline
         self.executor
             .execute(
@@ -64,13 +77,16 @@ impl CoagentServer {
                 &input,
                 artifact_paths,
                 // Backend call closure
-                |backend| async move {
-                    match backend {
-                        Backend::Mock => Ok(PureReviewResult::mock_pass()),
-                        Backend::Reasonix(runner) => runner
-                            .run(&goal, &diff_path)
-                            .await
-                            .map_err(|e| e.to_string()),
+                |backend| {
+                    let ctx = context.clone();
+                    async move {
+                        match backend {
+                            Backend::Mock => Ok(PureReviewResult::mock_pass()),
+                            Backend::Reasonix(runner) => runner
+                                .run(&ctx.goal, &ctx.diff_path, &ctx)
+                                .await
+                                .map_err(|e| e.to_string()),
+                        }
                     }
                 },
                 // Output validation closure
@@ -125,6 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| format!("failed to initialize schema registry: {e}"))?;
 
     let executor = RuntimeToolExecutor::new(ExecutorContext {
+        require_external_ids: config.require_external_ids,
         kernel: Arc::new(Mutex::new(kernel)),
         backend,
         schema_registry: Arc::new(schema_registry),

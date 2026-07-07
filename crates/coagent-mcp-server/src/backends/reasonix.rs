@@ -92,6 +92,7 @@ impl AcpSession {
         &mut self,
         goal: &str,
         diff_path: &str,
+        context: &crate::backends::context::ContextProjection,
     ) -> Result<PureReviewResult, ReasonixError> {
         let timeout_ms: u64 = std::env::var("COAGENT_AGENT_TIMEOUT_MS")
             .ok()
@@ -101,7 +102,7 @@ impl AcpSession {
         let id = self.next_request_id;
         self.next_request_id += 2;
 
-        let prompt = build_review_prompt(goal, diff_path);
+        let prompt = build_review_prompt(goal, diff_path, context);
         send_frame(
             &mut self.stdin,
             id,
@@ -182,6 +183,7 @@ impl ReasonixRunner {
         &self,
         goal: &str,
         diff_path: &str,
+        context: &crate::backends::context::ContextProjection,
     ) -> Result<PureReviewResult, ReasonixError> {
         let mut guard = self.session.lock().await;
 
@@ -191,7 +193,7 @@ impl ReasonixRunner {
         }
 
         let session = guard.as_mut().unwrap();
-        session.send_prompt(goal, diff_path).await
+        session.send_prompt(goal, diff_path, context).await
     }
 }
 
@@ -248,8 +250,8 @@ You are reviewing a code diff.
 
 GOAL: {goal}
 DIFF PATH: {diff_path}
-
-Read the diff file, analyze it, then return your review as a single JSON object.
+{context_section}
+Read the available files above, analyze the diff, then return your review as a single JSON object.
 Return ONLY the JSON. No markdown, no explanation, no surrounding text.
 
 {
@@ -283,10 +285,15 @@ RULES:
 6. Return ONLY the JSON object
 "#;
 
-fn build_review_prompt(goal: &str, diff_path: &str) -> String {
+fn build_review_prompt(
+    goal: &str,
+    diff_path: &str,
+    context: &crate::backends::context::ContextProjection,
+) -> String {
     REASONIX_REVIEW_PROMPT_TEMPLATE
         .replace("{goal}", goal)
         .replace("{diff_path}", diff_path)
+        .replace("{context_section}", &context.render_context_section())
 }
 
 fn parse_response_frame(
@@ -330,6 +337,7 @@ fn extract_json(text: &str) -> Result<PureReviewResult, serde_json::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backends::context::ContextProjection;
 
     use std::fs;
     use std::sync::LazyLock;
@@ -349,7 +357,14 @@ mod tests {
 
         let runner = ReasonixRunner::new("fake-model", fake.dir.clone());
 
-        let result = runner.run("review the diff", "changes.diff").await.unwrap();
+        let result = runner
+            .run(
+                "review the diff",
+                "changes.diff",
+                &ContextProjection::default(),
+            )
+            .await
+            .unwrap();
 
         assert_eq!(result.verdict, "needs_fix");
         assert_eq!(result.summary, "Fake ACP review.");
@@ -373,7 +388,11 @@ mod tests {
         let runner = ReasonixRunner::new("fake-model", fake.dir.clone());
 
         let error = runner
-            .run("review the diff", "changes.diff")
+            .run(
+                "review the diff",
+                "changes.diff",
+                &ContextProjection::default(),
+            )
             .await
             .unwrap_err();
 
@@ -394,7 +413,11 @@ mod tests {
         let runner = ReasonixRunner::new("fake-model", fake.dir.clone());
 
         let error = runner
-            .run("review the diff", "changes.diff")
+            .run(
+                "review the diff",
+                "changes.diff",
+                &ContextProjection::default(),
+            )
             .await
             .unwrap_err();
 
@@ -415,7 +438,11 @@ mod tests {
         let runner = ReasonixRunner::new("fake-model", fake.dir.clone());
 
         let error = runner
-            .run("review the diff", "changes.diff")
+            .run(
+                "review the diff",
+                "changes.diff",
+                &ContextProjection::default(),
+            )
             .await
             .unwrap_err();
 
@@ -436,7 +463,11 @@ mod tests {
         let runner = ReasonixRunner::new("fake-model", fake.dir.clone());
 
         let error = runner
-            .run("review the diff", "changes.diff")
+            .run(
+                "review the diff",
+                "changes.diff",
+                &ContextProjection::default(),
+            )
             .await
             .unwrap_err();
 

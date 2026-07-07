@@ -1,7 +1,8 @@
-use std::path::PathBuf;
+﻿use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub require_external_ids: bool,
     pub repo_root: PathBuf,
     pub backend_override: Option<BackendId>,
     pub reasonix_model: String,
@@ -22,10 +23,14 @@ impl Config {
             Ok(value) => return Err(ConfigError::InvalidBackend(value)),
             Err(_) => None,
         };
+        let require_external_ids = std::env::var("COAGENT_REQUIRE_EXTERNAL_IDS")
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
         let reasonix_model =
             std::env::var("COAGENT_REASONIX_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".into());
 
         Ok(Self {
+            require_external_ids,
             repo_root: PathBuf::from(repo_root),
             backend_override,
             reasonix_model,
