@@ -1,4 +1,4 @@
-﻿use std::path::PathBuf;
+use std::path::PathBuf;
 use std::process::Stdio;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -192,8 +192,34 @@ impl ReasonixRunner {
             *guard = Some(session);
         }
 
-        let session = guard.as_mut().unwrap();
-        session.send_prompt(goal, diff_path, context).await
+        let first = {
+            let session = guard.as_mut().unwrap();
+            session.send_prompt(goal, diff_path, context).await
+        };
+
+        match first {
+            Ok(result) => Ok(result),
+            Err(error) if error.is_recoverable() => {
+                eprintln!(
+                    "[coagent] Reasonix session failed ({}), reconnecting and retrying",
+                    error
+                );
+                *guard = None;
+                let mut session =
+                    AcpSession::connect(&self.model, &self.cwd)
+                        .await
+                        .map_err(|connect_err| {
+                            ReasonixError::Protocol(format!(
+                                "session recovery failed after {}: {}",
+                                error, connect_err
+                            ))
+                        })?;
+                let retry = session.send_prompt(goal, diff_path, context).await;
+                *guard = Some(session);
+                retry
+            }
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -241,6 +267,13 @@ pub enum ReasonixError {
     Protocol(String),
     #[error("timeout: {0}")]
     Timeout(String),
+}
+
+impl ReasonixError {
+    /// Protocol and Io errors are recoverable via session restart.
+    fn is_recoverable(&self) -> bool {
+        matches!(self, Self::Io(_) | Self::Protocol(_))
+    }
 }
 
 /// Prompt template for Reasonix backend, generated from coagent-v1.schema.json.

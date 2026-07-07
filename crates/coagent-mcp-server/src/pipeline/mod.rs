@@ -1,4 +1,4 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 
 use coagent_runtime_core::{
     kernel::{AuditEvent, RuntimeDecisionValue, RuntimeKernel},
@@ -81,16 +81,20 @@ impl RuntimeToolExecutor {
         if !validation.valid {
             let detail = format_schema_errors(self.ctx.tool.input_schema(), &validation);
             let audit_task = task_id.clone().unwrap_or_else(|| "pre-gate".into());
+            let audit_req = request_id.clone().unwrap_or_else(|| "pre-gate".into());
             let _ = self.ctx.kernel.lock().await.write_audit(AuditEvent {
-                task_id: audit_task,
+                task_id: audit_task.clone(),
                 event_type: "input_schema_validation_failed".into(),
                 summary: detail.clone(),
                 payload_json: serde_json::json!({
+                    "task_id": audit_task,
+                    "request_id": audit_req,
                     "expected_schema": self.ctx.tool.input_schema(),
                     "errors": validation.errors.iter().map(|e| {
                         serde_json::json!({"path": e.path, "message": e.message})
                     }).collect::<Vec<_>>()
-                }).to_string(),
+                })
+                .to_string(),
             });
             return Err(ErrorData::invalid_params(detail, None));
         }
@@ -187,9 +191,13 @@ impl RuntimeToolExecutor {
                 payload_json: serde_json::json!({
                     "task_id": &task_id,
                     "request_id": &request_id,
-                    "path": e.path,
-                    "message": e.message
-                }).to_string(),
+                    "expected_schema": self.ctx.tool.output_schema(),
+                    "errors": [{
+                        "path": e.path,
+                        "message": e.message
+                    }]
+                })
+                .to_string(),
             });
             let _ = self.ctx.kernel.lock().await.fail_operation(
                 &task_id,
@@ -224,7 +232,8 @@ impl RuntimeToolExecutor {
                     "errors": wrapper_validation.errors.iter().map(|e| {
                         serde_json::json!({"path": e.path, "message": e.message})
                     }).collect::<Vec<_>>()
-                }).to_string(),
+                })
+                .to_string(),
             });
             let _ = self.ctx.kernel.lock().await.fail_operation(
                 &task_id,
