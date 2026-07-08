@@ -163,14 +163,19 @@ enum value enforcement.
 
 ## ACP Session Recovery
 
-`ReasonixRunner::run()` implements Reasonix-specific reconnect + retry. It
-does not yet honor arbitrary `AgentProfile.command` / `AgentProfile.args`; that
-remains the boundary for a future generic ACP backend.
+`ReasonixRunner::run()` implements a single Reasonix-specific persistent ACP
+session. The runner is intentionally serial: concurrent calls to the same
+runner queue on the session mutex until the current `send_prompt()` finishes.
+This preserves ACP frame ordering and Reasonix context continuity.
+
+It does not yet honor arbitrary `AgentProfile.command` / `AgentProfile.args`;
+that remains the boundary for a future generic ACP backend.
 
 ```
 send_prompt → Ok → return
 send_prompt → Err(recoverable: Io|Protocol) → drop session → reconnect → retry
-send_prompt → Err(non-recoverable) → propagate
+send_prompt → Err(Timeout) → drop session → propagate without retry
+send_prompt → Err(Spawn) → propagate
 ```
 
 ## Audit (SQLite)

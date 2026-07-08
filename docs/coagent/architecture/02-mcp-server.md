@@ -58,14 +58,17 @@ enum Backend {
 
 ## Reasonix ACP Session Recovery
 
-The `ReasonixRunner` implements Reasonix-specific automatic reconnect + retry.
-It currently drives the `reasonix acp --model ...` path, not arbitrary
+The `ReasonixRunner` implements one Reasonix-specific persistent ACP session.
+It is intentionally serial: concurrent calls to the same runner queue behind
+the session mutex, so only one prompt uses the stdin/stdout ACP stream at a
+time. It currently drives the `reasonix acp --model ...` path, not arbitrary
 `AgentProfile.command` / `AgentProfile.args` execution.
 
 ```
 send_prompt() → Ok → return result
 send_prompt() → Err(Io|Protocol) → drop session → reconnect → retry same prompt
-send_prompt() → Err(Spawn|Timeout) → propagate immediately
+send_prompt() → Err(Timeout) → drop session → propagate without retry
+send_prompt() → Err(Spawn) → propagate immediately
 ```
 
 This ensures a single Reasonix child process crash does not permanently

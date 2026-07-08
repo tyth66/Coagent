@@ -1,3 +1,4 @@
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process::Stdio;
 
@@ -45,7 +46,17 @@ impl AcpSession {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| ReasonixError::Spawn(e.to_string()))?;
+            .map_err(|e| {
+                if e.kind() == ErrorKind::NotFound {
+                    ReasonixError::Spawn(format!(
+                        "Reasonix CLI not found at '{reasonix_cmd}'. Set COAGENT_REASONIX_PATH or add reasonix to PATH. Original error: {e}"
+                    ))
+                } else {
+                    ReasonixError::Spawn(format!(
+                        "failed to start Reasonix CLI '{reasonix_cmd}'. Check COAGENT_REASONIX_PATH, PATH, and the sandbox environment. Original error: {e}"
+                    ))
+                }
+            })?;
 
         let mut stdin = child.stdin.take().expect("stdin");
         let stdout = child.stdout.take().expect("stdout");
@@ -63,7 +74,7 @@ impl AcpSession {
         )
         .await?;
         let init_resp = read_line(&mut reader).await?;
-        parse_response_frame(&init_resp, 1, "initialize")?;
+        parse_response_frame(&init_resp, 1, "Reasonix ACP initialize failed")?;
 
         // ACP session/new
         send_frame(
@@ -77,7 +88,8 @@ impl AcpSession {
         .await?;
 
         let session_resp = read_line(&mut reader).await?;
-        let session = parse_response_frame(&session_resp, 2, "session/new")?;
+        let session =
+            parse_response_frame(&session_resp, 2, "Reasonix ACP session creation failed")?;
         let session_id = session["result"]["sessionId"]
             .as_str()
             .ok_or_else(|| ReasonixError::Protocol("missing sessionId".into()))?
@@ -169,6 +181,8 @@ use std::sync::Arc;
 /// Reasonix-specific ACP runner. Holds a shared, lazily-initialized Reasonix
 /// session; it does not yet honor arbitrary AgentProfile command/args.
 /// The session is created on first use and reused for subsequent calls.
+/// Runs are intentionally serialized by the session mutex for the full
+/// send_prompt await, preserving ACP frame ordering and Reasonix context.
 #[derive(Clone)]
 pub struct ReasonixRunner {
     model: String,
@@ -205,12 +219,15 @@ impl ReasonixRunner {
 
         match first {
             Ok(result) => Ok(result),
-            Err(error) if error.is_recoverable() => {
+            Err(error) if error.should_drop_session() => {
                 eprintln!(
-                    "[coagent] Reasonix session failed ({}), reconnecting and retrying",
+                    "[coagent] Reasonix session failed ({}), dropping session",
                     error
                 );
                 *guard = None;
+                if !error.is_retryable() {
+                    return Err(error);
+                }
                 let mut session =
                     AcpSession::connect(&self.model, &self.cwd)
                         .await
@@ -276,8 +293,13 @@ pub enum ReasonixError {
 }
 
 impl ReasonixError {
-    /// Protocol and Io errors are recoverable via session restart.
-    fn is_recoverable(&self) -> bool {
+    /// Errors that poison the current ACP stream and require dropping the session.
+    fn should_drop_session(&self) -> bool {
+        matches!(self, Self::Io(_) | Self::Protocol(_) | Self::Timeout(_))
+    }
+
+    /// Errors that are safe to retry once after reconnecting.
+    fn is_retryable(&self) -> bool {
         matches!(self, Self::Io(_) | Self::Protocol(_))
     }
 }
@@ -430,6 +452,176 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reasonix_runner_reuses_one_session_for_multiple_prompts() {
+        let _guard = ENV_LOCK.lock().await;
+        let fake = FakeReasonix::new("persistent-reuse");
+        let _env = TestEnv::set(&[
+            ("COAGENT_REASONIX_PATH", fake.executable_path()),
+            ("COAGENT_FAKE_REASONIX_CASE", "success".into()),
+            ("COAGENT_AGENT_TIMEOUT_MS", "1000".into()),
+        ]);
+
+        let runner = ReasonixRunner::new("fake-model", fake.dir.clone());
+        let context = ContextProjection::default();
+
+        runner
+            .run("first review", "changes.diff", &context)
+            .await
+            .unwrap();
+        runner
+            .run("second review", "changes.diff", &context)
+            .await
+            .unwrap();
+
+        assert_eq!(fake.count("spawn"), 1);
+        assert_eq!(fake.count("initialize"), 1);
+        assert_eq!(fake.count("session_new"), 1);
+        assert_eq!(fake.count("prompt"), 2);
+    }
+
+    #[tokio::test]
+    async fn reasonix_runner_reconnects_and_retries_after_protocol_eof() {
+        let _guard = ENV_LOCK.lock().await;
+        let fake = FakeReasonix::new("prompt-eof-once");
+        let _env = TestEnv::set(&[
+            ("COAGENT_REASONIX_PATH", fake.executable_path()),
+            ("COAGENT_FAKE_REASONIX_CASE", "prompt_eof_once".into()),
+            ("COAGENT_AGENT_TIMEOUT_MS", "1000".into()),
+        ]);
+
+        let runner = ReasonixRunner::new("fake-model", fake.dir.clone());
+
+        let result = runner
+            .run(
+                "review after recoverable eof",
+                "changes.diff",
+                &ContextProjection::default(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.verdict, "needs_fix");
+        assert_eq!(fake.count("spawn"), 2);
+        assert_eq!(fake.count("initialize"), 2);
+        assert_eq!(fake.count("session_new"), 2);
+        assert_eq!(fake.count("prompt"), 2);
+    }
+
+    #[tokio::test]
+    async fn reasonix_runner_drops_timed_out_session_without_retry() {
+        let _guard = ENV_LOCK.lock().await;
+        let fake = FakeReasonix::new("prompt-timeout-once");
+        let _env = TestEnv::set(&[
+            ("COAGENT_REASONIX_PATH", fake.executable_path()),
+            ("COAGENT_FAKE_REASONIX_CASE", "prompt_timeout_once".into()),
+            ("COAGENT_AGENT_TIMEOUT_MS", "100".into()),
+        ]);
+
+        let runner = ReasonixRunner::new("fake-model", fake.dir.clone());
+        let context = ContextProjection::default();
+
+        let error = runner
+            .run("first prompt times out", "changes.diff", &context)
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ReasonixError::Timeout(_)));
+        assert_eq!(fake.count("spawn"), 1);
+        assert_eq!(fake.count("prompt"), 1);
+
+        let result = runner
+            .run("second prompt uses fresh session", "changes.diff", &context)
+            .await
+            .unwrap();
+
+        assert_eq!(result.verdict, "needs_fix");
+        assert_eq!(fake.count("spawn"), 2);
+        assert_eq!(fake.count("initialize"), 2);
+        assert_eq!(fake.count("session_new"), 2);
+        assert_eq!(fake.count("prompt"), 2);
+    }
+
+    #[tokio::test]
+    async fn reasonix_prompt_includes_full_review_context() {
+        let _guard = ENV_LOCK.lock().await;
+        let fake = FakeReasonix::new("prompt-capture");
+        let _env = TestEnv::set(&[
+            ("COAGENT_REASONIX_PATH", fake.executable_path()),
+            ("COAGENT_FAKE_REASONIX_CASE", "success".into()),
+            ("COAGENT_AGENT_TIMEOUT_MS", "1000".into()),
+        ]);
+
+        let runner = ReasonixRunner::new("fake-model", fake.dir.clone());
+        let context = ContextProjection {
+            goal: "review full context".into(),
+            diff_path: ".agent/diffs/current.diff".into(),
+            context_path: Some(".agent/context/review.md".into()),
+            test_log_path: Some(".agent/logs/test.log".into()),
+            build_log_path: Some(".agent/logs/build.log".into()),
+            focus: vec!["correctness".into(), "policy".into()],
+            constraints: vec!["avoid new dependencies".into()],
+            base_branch: Some("main".into()),
+            working_branch: Some("feature/single-runner".into()),
+        };
+
+        runner
+            .run(&context.goal, &context.diff_path, &context)
+            .await
+            .unwrap();
+
+        let prompt_frame = fake.prompt_frame(1);
+        for expected in [
+            "GOAL: review full context",
+            "DIFF PATH: .agent/diffs/current.diff",
+            ".agent/context/review.md",
+            ".agent/logs/test.log",
+            ".agent/logs/build.log",
+            "BASE BRANCH: main",
+            "WORKING BRANCH: feature/single-runner",
+            "FOCUS AREAS",
+            "correctness",
+            "policy",
+            "CONSTRAINTS",
+            "avoid new dependencies",
+        ] {
+            assert!(
+                prompt_frame.contains(expected),
+                "prompt frame missing {expected}: {prompt_frame}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn reasonix_spawn_error_mentions_path_configuration() {
+        let _guard = ENV_LOCK.lock().await;
+        let fake = FakeReasonix::new("missing-executable");
+        let missing = fake.dir.join("missing-reasonix");
+        let _env = TestEnv::set(&[
+            (
+                "COAGENT_REASONIX_PATH",
+                missing.to_string_lossy().into_owned(),
+            ),
+            ("COAGENT_AGENT_TIMEOUT_MS", "1000".into()),
+        ]);
+
+        let runner = ReasonixRunner::new("fake-model", fake.dir.clone());
+
+        let error = runner
+            .run(
+                "review with missing cli",
+                "changes.diff",
+                &ContextProjection::default(),
+            )
+            .await
+            .unwrap_err();
+
+        let message = error.to_string();
+        assert!(matches!(error, ReasonixError::Spawn(_)));
+        assert!(message.contains("Reasonix CLI not found"));
+        assert!(message.contains("COAGENT_REASONIX_PATH"));
+        assert!(message.contains("PATH"));
+    }
+
+    #[tokio::test]
     async fn reasonix_contract_surfaces_initialize_error_message() {
         let _guard = ENV_LOCK.lock().await;
         let fake = FakeReasonix::new("initialize-error");
@@ -553,6 +745,17 @@ mod tests {
         fn executable_path(&self) -> String {
             self.executable.to_string_lossy().into_owned()
         }
+
+        fn count(&self, name: &str) -> u64 {
+            fs::read_to_string(self.dir.join(format!("{name}_count.txt")))
+                .ok()
+                .and_then(|value| value.trim().parse().ok())
+                .unwrap_or(0)
+        }
+
+        fn prompt_frame(&self, index: u64) -> String {
+            fs::read_to_string(self.dir.join(format!("prompt_{index}.json"))).unwrap_or_default()
+        }
     }
 
     impl Drop for FakeReasonix {
@@ -623,15 +826,41 @@ mod tests {
         r#"
 $case = $env:COAGENT_FAKE_REASONIX_CASE
 
+function Increment-Count($name) {
+    $path = Join-Path (Get-Location) "$($name)_count.txt"
+    $value = 0
+    if (Test-Path $path) {
+        $text = Get-Content -Raw $path
+        if ($text) {
+            $value = [int]$text.Trim()
+        }
+    }
+    Set-Content -NoNewline -Path $path -Value ($value + 1)
+}
+
+function Read-Count($name) {
+    $path = Join-Path (Get-Location) "$($name)_count.txt"
+    if (Test-Path $path) {
+        $text = Get-Content -Raw $path
+        if ($text) {
+            return [int]$text.Trim()
+        }
+    }
+    return 0
+}
+
 function Write-Frame($frame) {
     [Console]::Out.WriteLine(($frame | ConvertTo-Json -Compress -Depth 20))
     [Console]::Out.Flush()
 }
 
+Increment-Count "spawn"
+
 while ($null -ne ($line = [Console]::In.ReadLine())) {
     $msg = $line | ConvertFrom-Json
 
     if ($msg.method -eq "initialize") {
+        Increment-Count "initialize"
         if ($case -eq "initialize_error") {
             Write-Frame @{ jsonrpc = "2.0"; id = $msg.id; error = @{ code = -32000; message = "initialize rejected" } }
             exit 0
@@ -639,6 +868,7 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
         Write-Frame @{ jsonrpc = "2.0"; id = $msg.id; result = @{ ok = $true } }
     }
     elseif ($msg.method -eq "session/new") {
+        Increment-Count "session_new"
         if ($case -eq "session_new_error") {
             Write-Frame @{ jsonrpc = "2.0"; id = $msg.id; error = @{ code = -32001; message = "session rejected" } }
             exit 0
@@ -646,7 +876,17 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
         Write-Frame @{ jsonrpc = "2.0"; id = $msg.id; result = @{ sessionId = "fake-session" } }
     }
     elseif ($msg.method -eq "session/prompt") {
+        Increment-Count "prompt"
+        $promptCount = Read-Count "prompt"
+        Set-Content -Path (Join-Path (Get-Location) "prompt_$($promptCount).json") -Value $line
         if ($case -eq "prompt_eof") {
+            exit 0
+        }
+        if (($case -eq "prompt_eof_once") -and ($promptCount -eq 1)) {
+            exit 0
+        }
+        if (($case -eq "prompt_timeout_once") -and ($promptCount -eq 1)) {
+            Start-Sleep -Milliseconds 1000
             exit 0
         }
 
@@ -687,24 +927,58 @@ set -eu
 
 case_name="${COAGENT_FAKE_REASONIX_CASE:-success}"
 
+increment_count() {
+  name="$1"
+  path="${name}_count.txt"
+  value=0
+  if [ -f "$path" ]; then
+    value="$(cat "$path")"
+  fi
+  printf '%s' "$((value + 1))" > "$path"
+}
+
+read_count() {
+  name="$1"
+  path="${name}_count.txt"
+  if [ -f "$path" ]; then
+    cat "$path"
+  else
+    printf '0'
+  fi
+}
+
+increment_count spawn
+
 while IFS= read -r line; do
   id="$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')"
   method="$(printf '%s' "$line" | sed -n 's/.*"method":"\([^"]*\)".*/\1/p')"
 
   if [ "$method" = "initialize" ]; then
+    increment_count initialize
     if [ "$case_name" = "initialize_error" ]; then
       printf '{"jsonrpc":"2.0","id":%s,"error":{"code":-32000,"message":"initialize rejected"}}\n' "$id"
       exit 0
     fi
     printf '{"jsonrpc":"2.0","id":%s,"result":{"ok":true}}\n' "$id"
   elif [ "$method" = "session/new" ]; then
+    increment_count session_new
     if [ "$case_name" = "session_new_error" ]; then
       printf '{"jsonrpc":"2.0","id":%s,"error":{"code":-32001,"message":"session rejected"}}\n' "$id"
       exit 0
     fi
     printf '{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"fake-session"}}\n' "$id"
   elif [ "$method" = "session/prompt" ]; then
+    increment_count prompt
+    prompt_count="$(read_count prompt)"
+    printf '%s' "$line" > "prompt_${prompt_count}.json"
     if [ "$case_name" = "prompt_eof" ]; then
+      exit 0
+    fi
+    if [ "$case_name" = "prompt_eof_once" ] && [ "$prompt_count" = "1" ]; then
+      exit 0
+    fi
+    if [ "$case_name" = "prompt_timeout_once" ] && [ "$prompt_count" = "1" ]; then
+      sleep 1
       exit 0
     fi
     if [ "$case_name" = "invalid_review" ]; then
