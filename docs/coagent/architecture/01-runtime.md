@@ -5,7 +5,7 @@ No JSON-RPC subprocess.
 
 ## State Machine
 
-### TaskState (10-state FSM, long-lived)
+### TaskState (9-state FSM, long-lived)
 
 ```
                 ┌──────────────────────────┐
@@ -93,8 +93,8 @@ Thread-safe (`Arc<RwLock<HashMap>>`): `register_dynamic()`, `unregister()`,
 ### Approval Gates
 
 `ApprovalPolicy::Required` → `RequireApproval` runtime decision.
-Pipeline returns `{"status":"approval_required"}`. Caller transitions
-task from `WaitingApproval` back to `Running` to resume.
+Pipeline returns `{"status":"approval_required"}` without invoking the backend.
+No public approve/resume MCP tool is currently exposed.
 
 ### Permission Levels
 
@@ -244,7 +244,7 @@ TASK-001:
 ```
 
 Kernel API: `start_attempt()` → `complete_attempt()` / `fail_attempt()`.
-Attempt recording in the execution pipeline is the next integration step.
+Attempt recording is wired into the execution pipeline.
 ## Lifecycle API
 
 ```rust

@@ -1,4 +1,4 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 
 use coagent_runtime_core::{
     kernel::{AuditEvent, RuntimeDecisionValue, RuntimeKernel},
@@ -12,7 +12,7 @@ use rmcp::{
 use serde::Serialize;
 use tokio::sync::Mutex;
 
-use crate::backends::{AgentBackend, BackendSelector};
+use crate::backends::AgentBackend;
 
 /// Shared server state passed to the executor pipeline.
 #[derive(Clone)]
@@ -23,9 +23,9 @@ pub struct ExecutorContext {
     pub backend: Arc<dyn AgentBackend>,
     /// Per-operation backend registry for attempt tracking.
     pub backend_registry: Option<std::sync::Arc<crate::backends::BackendRegistry>>,
-    pub backend_selector: Option<std::sync::Arc<dyn crate::backends::BackendSelector>>,
     pub required_capability: String,
     pub default_backend_id: String,
+    pub complete_task_on_success: bool,
     pub schema_registry: Arc<SchemaRegistry>,
     pub tool: ToolDefinition,
 }
@@ -68,7 +68,7 @@ impl RuntimeToolExecutor {
         artifact_paths: ArtifactPaths,
         backend_call: impl FnOnce(std::sync::Arc<dyn AgentBackend>) -> BFut,
         validate_output: impl FnOnce(&O) -> Result<(), ValidationError>,
-        build_wrapper: impl FnOnce(O) -> W,
+        build_wrapper: impl FnOnce(O, &str, &str) -> W,
     ) -> Result<CallToolResult, ErrorData>
     where
         I: Serialize,
@@ -88,20 +88,14 @@ impl RuntimeToolExecutor {
             let detail = format_schema_errors(self.ctx.tool.input_schema(), &validation);
             let audit_task = task_id.clone().unwrap_or_else(|| "pre-gate".into());
             let audit_req = request_id.clone().unwrap_or_else(|| "pre-gate".into());
-            let _ = self.ctx.kernel.lock().await.write_audit(AuditEvent {
-                task_id: audit_task.clone(),
-                event_type: "input_schema_validation_failed".into(),
-                summary: detail.clone(),
-                payload_json: serde_json::json!({
-                    "task_id": audit_task,
-                    "request_id": audit_req,
-                    "expected_schema": self.ctx.tool.input_schema(),
-                    "errors": validation.errors.iter().map(|e| {
-                        serde_json::json!({"path": e.path, "message": e.message})
-                    }).collect::<Vec<_>>()
-                })
-                .to_string(),
-            });
+            let _ = self.ctx.kernel.lock().await.record_schema_validation(
+                &audit_task,
+                Some(&audit_req),
+                self.ctx.tool.input_schema(),
+                "input",
+                false,
+                schema_errors_json(&validation.errors),
+            );
             return Err(ErrorData::invalid_params(detail, None));
         }
 
@@ -120,6 +114,14 @@ impl RuntimeToolExecutor {
         }
         let task_id = task_id.unwrap_or_else(|| format!("TASK-{}", uuid::Uuid::new_v4()));
         let request_id = request_id.unwrap_or_else(|| format!("REQ-{}", uuid::Uuid::new_v4()));
+        let _ = self.ctx.kernel.lock().await.record_schema_validation(
+            &task_id,
+            Some(&request_id),
+            self.ctx.tool.input_schema(),
+            "input",
+            true,
+            "[]".to_string(),
+        );
 
         // ── Stage 3: Runtime gate ──
         let decision = {
@@ -179,11 +181,7 @@ impl RuntimeToolExecutor {
             .backend_registry
             .as_ref()
             .and_then(|reg| {
-                let tag = &self.ctx.required_capability;
-                let default = &self.ctx.default_backend_id;
-                let backend_ref = reg.select_by_tag(tag, default);
-                // Convert &dyn to Arc<dyn> — fall back to default Arc
-                Some(self.ctx.backend.clone())
+                reg.select_by_tag(&self.ctx.required_capability, &self.ctx.default_backend_id)
             })
             .unwrap_or_else(|| self.ctx.backend.clone());
 
@@ -209,7 +207,12 @@ impl RuntimeToolExecutor {
             }
             Err(error) => {
                 if attempt_id > 0 {
-                    let _ = self.ctx.kernel.lock().await.fail_attempt(attempt_id, &error);
+                    let _ = self
+                        .ctx
+                        .kernel
+                        .lock()
+                        .await
+                        .fail_attempt(attempt_id, &error);
                 }
                 let _ = self.ctx.kernel.lock().await.fail_operation(
                     &task_id,
@@ -224,21 +227,18 @@ impl RuntimeToolExecutor {
 
         // ── Stage 5: Validate output ──
         if let Err(e) = validate_output(&backend_output) {
-            let _ = self.ctx.kernel.lock().await.write_audit(AuditEvent {
-                task_id: task_id.clone(),
-                event_type: "output_schema_validation_failed".into(),
-                summary: format!("{}: {}", e.path, e.message),
-                payload_json: serde_json::json!({
-                    "task_id": &task_id,
-                    "request_id": &request_id,
-                    "expected_schema": self.ctx.tool.output_schema(),
-                    "errors": [{
-                        "path": e.path,
-                        "message": e.message
-                    }]
-                })
+            let _ = self.ctx.kernel.lock().await.record_schema_validation(
+                &task_id,
+                Some(&request_id),
+                self.ctx.tool.output_schema(),
+                "output",
+                false,
+                serde_json::json!([{
+                    "path": e.path,
+                    "message": e.message
+                }])
                 .to_string(),
-            });
+            );
             let _ = self.ctx.kernel.lock().await.fail_operation(
                 &task_id,
                 Some(&request_id),
@@ -249,9 +249,17 @@ impl RuntimeToolExecutor {
             let err_text = format!("worker_schema_invalid: {}: {}", e.path, e.message);
             return Ok(CallToolResult::error(vec![ContentBlock::text(err_text)]));
         }
+        let _ = self.ctx.kernel.lock().await.record_schema_validation(
+            &task_id,
+            Some(&request_id),
+            self.ctx.tool.output_schema(),
+            "output",
+            true,
+            "[]".to_string(),
+        );
 
         // ── Stage 6: Build wrapper + validate wrapper schema ──
-        let wrapper = build_wrapper(backend_output);
+        let wrapper = build_wrapper(backend_output, &task_id, &request_id);
         let wrapper_payload = serde_json::to_value(&wrapper).map_err(|e| {
             ErrorData::internal_error(format!("wrapper serialization failed: {e}"), None)
         })?;
@@ -261,20 +269,14 @@ impl RuntimeToolExecutor {
             .validate(self.ctx.tool.output_schema(), &wrapper_payload);
         if !wrapper_validation.valid {
             let detail = format_schema_errors(self.ctx.tool.output_schema(), &wrapper_validation);
-            let _ = self.ctx.kernel.lock().await.write_audit(AuditEvent {
-                task_id: task_id.clone(),
-                event_type: "wrapper_schema_validation_failed".into(),
-                summary: detail.clone(),
-                payload_json: serde_json::json!({
-                    "task_id": &task_id,
-                    "request_id": &request_id,
-                    "expected_schema": self.ctx.tool.output_schema(),
-                    "errors": wrapper_validation.errors.iter().map(|e| {
-                        serde_json::json!({"path": e.path, "message": e.message})
-                    }).collect::<Vec<_>>()
-                })
-                .to_string(),
-            });
+            let _ = self.ctx.kernel.lock().await.record_schema_validation(
+                &task_id,
+                Some(&request_id),
+                self.ctx.tool.output_schema(),
+                "wrapper",
+                false,
+                schema_errors_json(&wrapper_validation.errors),
+            );
             let _ = self.ctx.kernel.lock().await.fail_operation(
                 &task_id,
                 Some(&request_id),
@@ -284,6 +286,14 @@ impl RuntimeToolExecutor {
             );
             return Ok(CallToolResult::error(vec![ContentBlock::text(detail)]));
         }
+        let _ = self.ctx.kernel.lock().await.record_schema_validation(
+            &task_id,
+            Some(&request_id),
+            self.ctx.tool.output_schema(),
+            "wrapper",
+            true,
+            "[]".to_string(),
+        );
 
         // ── Stage 7: Complete lifecycle ──
         let _ = self.ctx.kernel.lock().await.complete_operation(
@@ -291,12 +301,25 @@ impl RuntimeToolExecutor {
             Some(&request_id),
             self.ctx.tool.operation(),
         );
+        if self.ctx.complete_task_on_success {
+            let _ = self.ctx.kernel.lock().await.complete_task(&task_id);
+        }
 
         // ── Stage 8: Serialize final response ──
         let text = serde_json::to_string(&wrapper)
             .unwrap_or_else(|_| r#"{"error":"serialization failed"}"#.into());
         Ok(CallToolResult::success(vec![ContentBlock::text(text)]))
     }
+}
+
+fn schema_errors_json(errors: &[coagent_runtime_core::schema::SchemaValidationError]) -> String {
+    serde_json::json!(
+        errors
+            .iter()
+            .map(|e| serde_json::json!({"path": e.path, "message": e.message}))
+            .collect::<Vec<_>>()
+    )
+    .to_string()
 }
 
 /// Artifact path plan for a tool invocation.

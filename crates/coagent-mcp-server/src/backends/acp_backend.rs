@@ -1,9 +1,12 @@
-﻿use std::path::PathBuf;
+use std::path::PathBuf;
 
 use async_trait::async_trait;
 
 use super::agent_profile::AgentProfile;
-use super::backend_trait::{AgentBackend, BackendCapabilities, BackendError, BackendRequest, BackendResponse};
+use super::backend_trait::{
+    AgentBackend, BackendCapabilities, BackendError, BackendRequest, BackendResponse,
+};
+use super::context::ContextProjection;
 use super::reasonix::{ReasonixError, ReasonixRunner};
 
 /// An ACP backend driven by an AgentProfile.
@@ -28,6 +31,7 @@ impl AcpBackend {
     }
 
     /// Legacy constructor for backward compatibility.
+    #[allow(dead_code)]
     pub fn with_model(_id: impl Into<String>, model: impl Into<String>, cwd: PathBuf) -> Self {
         Self::new(AgentProfile::reasonix(cwd, &model.into()))
     }
@@ -35,47 +39,17 @@ impl AcpBackend {
 
 #[async_trait]
 impl AgentBackend for AcpBackend {
-        async fn invoke(&self, request: BackendRequest) -> Result<BackendResponse, BackendError> {
-        // Build prompt from context.
-        let diff_path = request.context.get("diff_path").and_then(|v| v.as_str()).unwrap_or("");
-        let prompt = format!(
-            "GOAL: {}
-DIFF PATH: {}
-
-Analyze the diff and return your review as JSON.",
-            request.goal, diff_path,
-        );
-
-        let mut client = super::acp_client::AcpClient::connect(
-            &self.profile.command,
-            &self.profile.args,
-            &self.profile.cwd,
-        )
-        .await
-        .map_err(|e| BackendError::Unavailable(e.to_string()))?;
-
-        let text = client
-            .send_prompt(&prompt, self.profile.timeout_ms)
+    async fn invoke(&self, request: BackendRequest) -> Result<BackendResponse, BackendError> {
+        let mut context = ContextProjection::from_backend_context(&request.context)
+            .map_err(BackendError::Protocol)?;
+        context.goal = request.goal.clone();
+        let review = self
+            .runner
+            .run(&request.goal, &context.diff_path, &context)
             .await
-            .map_err(|e| match e {
-                super::acp_client::AcpClientError::Spawn(msg) | super::acp_client::AcpClientError::Io(msg) => {
-                    BackendError::Unavailable(msg)
-                }
-                super::acp_client::AcpClientError::Protocol(msg) => BackendError::Protocol(msg),
-                super::acp_client::AcpClientError::Timeout(_msg) => BackendError::Timeout,
-            })?;
-
-        let payload: serde_json::Value = serde_json::from_str(&text)
-            .or_else(|_| {
-                text.find('{')
-                    .and_then(|start| {
-                        let slice = &text[start..];
-                        slice.rfind('}').map(|end| &slice[..=end])
-                    })
-                    .and_then(|json_str| serde_json::from_str(json_str).ok())
-                    .ok_or_else(|| BackendError::Protocol("unparseable response".into()))
-            })
-            .map_err(|e: BackendError| e)?;
+            .map_err(reasonix_error_to_backend_error)?;
+        let payload = serde_json::to_value(review)
+            .map_err(|e| BackendError::Protocol(format!("serialization: {e}")))?;
 
         Ok(BackendResponse {
             output_schema: request.output_schema.clone(),
@@ -93,6 +67,16 @@ Analyze the diff and return your review as JSON.",
             max_tokens: None,
             supports_streaming: true,
         }
+    }
+}
+
+fn reasonix_error_to_backend_error(error: ReasonixError) -> BackendError {
+    match error {
+        ReasonixError::Spawn(message) | ReasonixError::Io(message) => {
+            BackendError::Unavailable(message)
+        }
+        ReasonixError::Protocol(message) => BackendError::Protocol(message),
+        ReasonixError::Timeout(_) => BackendError::Timeout,
     }
 }
 
@@ -157,6 +141,11 @@ mod tests {
         let profile = AgentProfile::reasonix(PathBuf::from("."), "deepseek-v4-flash");
         let backend = AcpBackend::new(profile);
         assert_eq!(backend.backend_id(), "reasonix");
-        assert!(backend.capabilities().tags.contains(&"code.review.diff".to_string()));
+        assert!(
+            backend
+                .capabilities()
+                .tags
+                .contains(&"code.review.diff".to_string())
+        );
     }
 }

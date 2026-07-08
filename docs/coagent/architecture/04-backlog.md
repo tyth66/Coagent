@@ -39,7 +39,7 @@ input_schema, permission_level, artifact_plan, backend_prompt_builder, output_sc
 
 ## P2 — State Machine: two-layer split ✓ RESOLVED (2026-07-07)
 
-**Current state**: The 10-state FSM treats `Completed` as a task terminal state.
+**Current state**: The 9-state FSM treats `Completed` as a task terminal state.
 `RuntimeKernel::complete_operation()` sets the task to `Completed`, after which
 all further `evaluate_operation()` calls are rejected.
 

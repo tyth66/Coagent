@@ -5,6 +5,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
+use coagent_runtime_core::sandbox::SandboxConfig;
+
 use super::mock::PureReviewResult;
 
 // ── Persistent ACP Session ──
@@ -29,12 +31,15 @@ impl AcpSession {
     pub async fn connect(model: &str, cwd: &PathBuf) -> Result<Self, ReasonixError> {
         let reasonix_cmd =
             std::env::var("COAGENT_REASONIX_PATH").unwrap_or_else(|_| "reasonix".into());
+        let sandbox = reasonix_sandbox();
 
         let mut child = Command::new(&reasonix_cmd)
             .arg("acp")
             .arg("--model")
             .arg(model)
             .current_dir(cwd)
+            .env_clear()
+            .envs(sandbox.filtered_env())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -274,6 +279,21 @@ impl ReasonixError {
     fn is_recoverable(&self) -> bool {
         matches!(self, Self::Io(_) | Self::Protocol(_))
     }
+}
+
+fn reasonix_sandbox() -> SandboxConfig {
+    SandboxConfig::new().with_env_allowlist(vec![
+        "PATH".into(),
+        "PATHEXT".into(),
+        "SYSTEMROOT".into(),
+        "WINDIR".into(),
+        "COMSPEC".into(),
+        "APPDATA".into(),
+        "HOME".into(),
+        "USERPROFILE".into(),
+        "DEEPSEEK_API_KEY".into(),
+        "COAGENT_FAKE_REASONIX_CASE".into(),
+    ])
 }
 
 /// Prompt template for Reasonix backend, generated from coagent-v1.schema.json.

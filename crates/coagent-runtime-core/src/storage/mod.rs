@@ -1,4 +1,4 @@
-﻿use std::{
+use std::{
     fs,
     path::{Path, PathBuf},
 };
@@ -572,7 +572,6 @@ impl RuntimeStore {
         Ok(())
     }
 
-
     pub fn insert_lock(
         &self,
         lock_id: &str,
@@ -925,7 +924,8 @@ const MIGRATIONS: &[(&str, &str)] = &[
             hash TEXT
         );",
     ),
-    ("operation_attempts",
+    (
+        "operation_attempts",
         "CREATE TABLE IF NOT EXISTS operation_attempts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT,
@@ -939,7 +939,6 @@ const MIGRATIONS: &[(&str, &str)] = &[
             finished_at_ms INTEGER
         );",
     ),
-
     (
         "cache_entries",
         "CREATE TABLE IF NOT EXISTS cache_entries (

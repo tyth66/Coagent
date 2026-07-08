@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -8,6 +8,7 @@ use serde_json::Value;
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /// A request dispatched to a backend agent.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct BackendRequest {
     /// The goal/prompt for the agent.
@@ -23,6 +24,7 @@ pub struct BackendRequest {
 }
 
 /// A response from a backend agent.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct BackendResponse {
     /// Output schema the payload conforms to.
@@ -32,6 +34,7 @@ pub struct BackendResponse {
 }
 
 /// Capabilities a backend advertises.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct BackendCapabilities {
     pub tags: Vec<String>,
@@ -40,6 +43,7 @@ pub struct BackendCapabilities {
 }
 
 /// Errors from backend invocation.
+#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum BackendError {
     #[error("backend unavailable: {0}")]
@@ -71,19 +75,14 @@ pub trait AgentBackend: Send + Sync {
 
 /// Entry in the backend registry with runtime state.
 struct BackendEntry {
-    backend: Box<dyn AgentBackend>,
+    backend: Arc<dyn AgentBackend>,
     enabled: bool,
 }
 
 /// Registry of available backends with enabled/disabled state.
+#[derive(Default)]
 pub struct BackendRegistry {
     backends: HashMap<String, BackendEntry>,
-}
-
-impl Default for BackendRegistry {
-    fn default() -> Self {
-        Self { backends: HashMap::new() }
-    }
 }
 
 impl BackendRegistry {
@@ -91,57 +90,89 @@ impl BackendRegistry {
         Self::default()
     }
 
+    #[allow(dead_code)]
     pub fn register(&mut self, backend: Box<dyn AgentBackend>) {
+        self.register_arc(backend.into());
+    }
+
+    pub fn register_arc(&mut self, backend: Arc<dyn AgentBackend>) {
         let id = backend.backend_id().to_string();
-        self.backends.insert(id, BackendEntry { backend, enabled: true });
+        self.backends.insert(
+            id,
+            BackendEntry {
+                backend,
+                enabled: true,
+            },
+        );
     }
 
-    pub fn get(&self, id: &str) -> Option<&dyn AgentBackend> {
-        self.backends.get(id).filter(|e| e.enabled).map(|e| e.backend.as_ref())
+    pub fn get(&self, id: &str) -> Option<Arc<dyn AgentBackend>> {
+        self.backends
+            .get(id)
+            .filter(|e| e.enabled)
+            .map(|e| e.backend.clone())
     }
 
+    #[allow(dead_code)]
     pub fn disable(&mut self, id: &str) -> bool {
-        self.backends.get_mut(id).map(|e| { e.enabled = false; true }).unwrap_or(false)
+        self.backends
+            .get_mut(id)
+            .map(|e| {
+                e.enabled = false;
+                true
+            })
+            .unwrap_or(false)
     }
 
+    #[allow(dead_code)]
     pub fn enable(&mut self, id: &str) -> bool {
-        self.backends.get_mut(id).map(|e| { e.enabled = true; true }).unwrap_or(false)
+        self.backends
+            .get_mut(id)
+            .map(|e| {
+                e.enabled = true;
+                true
+            })
+            .unwrap_or(false)
     }
 
+    #[allow(dead_code)]
     pub fn is_enabled(&self, id: &str) -> bool {
         self.backends.get(id).map(|e| e.enabled).unwrap_or(false)
     }
 
-    pub fn select_by_tag(&self, tag: &str, default_id: &str) -> &dyn AgentBackend {
+    pub fn select_by_tag(&self, tag: &str, default_id: &str) -> Option<Arc<dyn AgentBackend>> {
         for entry in self.backends.values() {
             if entry.enabled && entry.backend.capabilities().tags.iter().any(|t| t == tag) {
-                return entry.backend.as_ref();
+                return Some(entry.backend.clone());
             }
         }
-        self.get(default_id).expect("default backend not found or disabled")
+        self.get(default_id)
     }
 
+    #[allow(dead_code)]
     pub fn list_ids(&self) -> Vec<String> {
         self.backends.keys().cloned().collect()
     }
 
+    #[allow(dead_code)]
     pub fn list_enabled_ids(&self) -> Vec<String> {
-        self.backends.iter()
+        self.backends
+            .iter()
             .filter(|(_, e)| e.enabled)
             .map(|(id, _)| id.clone())
             .collect()
     }
 
+    #[allow(dead_code)]
     pub fn total_count(&self) -> usize {
         self.backends.len()
     }
 
+    #[allow(dead_code)]
     pub fn enabled_count(&self) -> usize {
         self.backends.values().filter(|e| e.enabled).count()
     }
 }
-
-
 
 /// Selects a backend for a given tool specification.
 pub trait BackendSelector: Send + Sync {
@@ -167,7 +198,11 @@ impl BackendSelector for DefaultBackendSelector {
     ) -> String {
         // Try capability match first
         for b in available {
-            if b.capabilities().tags.iter().any(|t| t == tool_required_capability) {
+            if b.capabilities()
+                .tags
+                .iter()
+                .any(|t| t == tool_required_capability)
+            {
                 return b.backend_id().to_string();
             }
         }
@@ -177,6 +212,7 @@ impl BackendSelector for DefaultBackendSelector {
 }
 
 /// Selector with explicit preference order.
+#[allow(dead_code)]
 pub struct PreferredBackendSelector {
     pub preferred_backend: String,
     pub fallback_backend: String,
@@ -190,7 +226,10 @@ impl BackendSelector for PreferredBackendSelector {
         available: &[&dyn AgentBackend],
     ) -> String {
         // Try preferred first
-        if available.iter().any(|b| b.backend_id() == self.preferred_backend) {
+        if available
+            .iter()
+            .any(|b| b.backend_id() == self.preferred_backend)
+        {
             return self.preferred_backend.clone();
         }
         // Fallback
@@ -249,14 +288,18 @@ mod tests {
         }));
 
         // Both have tag "test", so the first one registered is returned
-        let selected = registry.select_by_tag("test", "default");
+        let selected = registry
+            .select_by_tag("test", "default")
+            .expect("matching backend");
         assert_eq!(selected.backend_id(), "default");
     }
 
     #[test]
     fn registry_disable_hides_backend() {
         let mut registry = BackendRegistry::new();
-        registry.register(Box::new(TestBackend { id: "default".into() }));
+        registry.register(Box::new(TestBackend {
+            id: "default".into(),
+        }));
         assert!(registry.is_enabled("default"));
         assert!(registry.disable("default"));
         assert!(!registry.is_enabled("default"));

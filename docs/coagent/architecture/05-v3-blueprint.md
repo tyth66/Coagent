@@ -20,7 +20,7 @@ Codex MCP Host
   -> coagent-mcp-server (~5 MB)
       ├── Pipeline         RuntimeToolExecutor 8-stage unified execution
       ├── ToolRegistry     ToolSpec-based declarative registration
-      ├── RuntimeKernel    10-state FSM + per-operation steps + attempt layer
+      ├── RuntimeKernel    9-state FSM + per-operation steps + attempt layer
       ├── BackendRegistry  AgentBackend trait + capability-based selection
       └── BackendSelector  DefaultBackendSelector / PreferredBackendSelector
 ```

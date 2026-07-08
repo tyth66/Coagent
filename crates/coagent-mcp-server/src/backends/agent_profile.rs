@@ -1,16 +1,14 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
-use tokio::sync::Mutex;
-
-use super::reasonix::{AcpSession, ReasonixRunner};
+use super::reasonix::AcpSession;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // AgentProfile — backend configuration
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /// Session scoping policy for ACP backends.
+#[allow(dead_code, clippy::enum_variant_names)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionPolicy {
     /// One session per backend globally.
@@ -24,6 +22,7 @@ pub enum SessionPolicy {
 }
 
 /// Trust level for a backend — constrains what it is allowed to do.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrustLevel {
     /// Read-only review, no workspace writes.
@@ -35,6 +34,7 @@ pub enum TrustLevel {
 }
 
 /// Configuration profile for an ACP-compatible backend agent.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AgentProfile {
     /// Unique identifier for this backend instance.
@@ -83,17 +83,20 @@ impl AgentProfile {
 
 /// Key for session pool lookup: backend_id + scope identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
 struct SessionKey {
     backend_id: String,
     scope: String, // project path or task_id depending on policy
 }
 
 /// Pool of ACP sessions, keyed by backend + scope.
+#[allow(dead_code)]
 pub struct AcpSessionPool {
     sessions: HashMap<SessionKey, AcpSession>,
 }
 
 impl AcpSessionPool {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             sessions: HashMap::new(),
@@ -101,6 +104,7 @@ impl AcpSessionPool {
     }
 
     /// Get or create a session for the given profile and scope.
+    #[allow(dead_code)]
     pub async fn get_or_create(
         &mut self,
         profile: &AgentProfile,
@@ -125,6 +129,7 @@ impl AcpSessionPool {
     }
 
     /// Remove and drop a session (e.g. on fatal error).
+    #[allow(dead_code)]
     pub fn invalidate(&mut self, backend_id: &str, scope: &str) {
         let key = SessionKey {
             backend_id: backend_id.to_string(),
@@ -134,6 +139,7 @@ impl AcpSessionPool {
     }
 
     /// Number of active sessions.
+    #[allow(dead_code)]
     pub fn session_count(&self) -> usize {
         self.sessions.len()
     }
@@ -153,7 +159,11 @@ mod tests {
     fn reasonix_profile_has_expected_defaults() {
         let profile = AgentProfile::reasonix(PathBuf::from("."), "deepseek-v4-flash");
         assert_eq!(profile.backend_id, "reasonix");
-        assert!(profile.capabilities.contains(&"code.review.diff".to_string()));
+        assert!(
+            profile
+                .capabilities
+                .contains(&"code.review.diff".to_string())
+        );
         assert_eq!(profile.trust_level, TrustLevel::ReviewOnly);
         assert_eq!(profile.session_policy, SessionPolicy::PerProjectTask);
     }

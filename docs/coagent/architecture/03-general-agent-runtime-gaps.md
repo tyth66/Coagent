@@ -107,7 +107,7 @@ and long-lived session recovery tests are still needed for production hardening.
 Codex MCP Host
   -> coagent-mcp-server (~5 MB)
       -> RuntimeKernel
-          ├── 10-state FSM (Queued→Running→Completed|Failed|Cancelled)
+          ├── 9-state FSM (Queued→Running→Completed|Failed|Cancelled)
           │   + Blocked, WaitingApproval, Retrying, PartiallyCompleted
           │   + subtask dependencies, timeout, cancel propagation
           ├── PolicyEngine
@@ -124,7 +124,7 @@ Codex MCP Host
 
 | Gap | Status |
 |-----|--------|
-| Task model too flat | ✓ RESOLVED — 10-state FSM |
+| Task model too flat | ✓ RESOLVED — 9-state FSM |
 | Tool model hard-coded | ✓ RESOLVED — dynamic registry |
 | Approval not composable | ✓ PARTIAL — RequireApproval gate |
 | Schema dual-track | ✓ RESOLVED — single authority |

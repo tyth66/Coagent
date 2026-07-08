@@ -35,7 +35,11 @@ impl Drop for AcpClient {
 
 impl AcpClient {
     /// Connect to an ACP agent by spawning its command.
-    pub async fn connect(command: &str, args: &[String], cwd: &PathBuf) -> Result<Self, AcpClientError> {
+    pub async fn connect(
+        command: &str,
+        args: &[String],
+        cwd: &PathBuf,
+    ) -> Result<Self, AcpClientError> {
         let mut child = Command::new(command)
             .args(args)
             .current_dir(cwd)
@@ -94,8 +98,7 @@ impl AcpClient {
         prompt: &str,
         timeout_ms: u64,
     ) -> Result<String, AcpClientError> {
-        let deadline = tokio::time::Instant::now()
-            + std::time::Duration::from_millis(timeout_ms);
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
         let id = self.next_request_id;
         self.next_request_id += 2;
 
@@ -158,19 +161,25 @@ async fn send_frame(
     method: &str,
     params: &serde_json::Value,
 ) -> Result<(), AcpClientError> {
-    let frame = serde_json::json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params });
+    let frame =
+        serde_json::json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params });
     stdin
         .write_all(format!("{}\n", frame).as_bytes())
         .await
         .map_err(|e| AcpClientError::Io(e.to_string()))?;
-    stdin.flush().await.map_err(|e| AcpClientError::Io(e.to_string()))
+    stdin
+        .flush()
+        .await
+        .map_err(|e| AcpClientError::Io(e.to_string()))
 }
 
 async fn read_line(
     reader: &mut BufReader<tokio::process::ChildStdout>,
 ) -> Result<String, AcpClientError> {
     let mut line = String::new();
-    let bytes_read = reader.read_line(&mut line).await
+    let bytes_read = reader
+        .read_line(&mut line)
+        .await
         .map_err(|e| AcpClientError::Io(e.to_string()))?;
     if bytes_read == 0 {
         return Err(AcpClientError::Protocol("ACP process closed stdout".into()));
@@ -186,12 +195,17 @@ fn parse_response_frame(
     let frame: serde_json::Value = serde_json::from_str(line)
         .map_err(|e| AcpClientError::Protocol(format!("{context}: invalid frame: {e}")))?;
     if frame.get("id").and_then(|v| v.as_u64()) != Some(expected_id) {
-        return Err(AcpClientError::Protocol(format!("{context}: unexpected response id")));
+        return Err(AcpClientError::Protocol(format!(
+            "{context}: unexpected response id"
+        )));
     }
     if let Some(error) = frame.get("error") {
         return Err(AcpClientError::Protocol(format!(
             "{context}: {}",
-            error.get("message").and_then(|v| v.as_str()).unwrap_or("unknown error")
+            error
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown error")
         )));
     }
     Ok(frame)

@@ -268,8 +268,6 @@ fn is_legal_transition(current: TaskStateValue, next: TaskStateValue) -> bool {
     )
 }
 
-
-
 /// Per-backend-invocation attempt within an operation.
 /// Each operation may have multiple attempts (retries, fallbacks).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

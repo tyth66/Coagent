@@ -1,4 +1,4 @@
-﻿/// Structured context projected from the MCP input to the Reasonix prompt.
+/// Structured context projected from the MCP input to the Reasonix prompt.
 ///
 /// Every field from ReviewDiffInput that is meaningful for the review backend
 /// is captured here, so the prompt template can reference them.
@@ -15,9 +15,78 @@ pub struct ContextProjection {
     pub working_branch: Option<String>,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backend_context_round_trips_to_rendered_prompt_section() {
+        let value = serde_json::json!({
+            "diff_path": ".agent/diffs/current.diff",
+            "context_path": ".agent/context/review.md",
+            "test_log_path": ".agent/logs/test.log",
+            "build_log_path": ".agent/logs/build.log",
+            "focus": ["correctness", "policy"],
+            "constraints": ["avoid new dependencies"],
+            "base_branch": "main",
+            "working_branch": "feature/coagent"
+        });
+
+        let projection = ContextProjection::from_backend_context(&value).expect("context");
+        let rendered = projection.render_context_section();
+
+        assert!(rendered.contains("FOCUS AREAS"));
+        assert!(rendered.contains("  - correctness"));
+        assert!(rendered.contains("CONSTRAINTS"));
+        assert!(rendered.contains("avoid new dependencies"));
+        assert!(rendered.contains("BASE BRANCH: main"));
+        assert!(rendered.contains("WORKING BRANCH: feature/coagent"));
+        assert!(rendered.contains(".agent/logs/test.log"));
+        assert!(rendered.contains(".agent/logs/build.log"));
+    }
+}
+
 impl ContextProjection {
+    pub fn from_backend_context(value: &serde_json::Value) -> Result<Self, String> {
+        let diff_path = value
+            .get("diff_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "missing diff_path".to_string())?
+            .to_string();
+        let optional_string = |key: &str| {
+            value
+                .get(key)
+                .and_then(|v| if v.is_null() { None } else { v.as_str() })
+                .map(str::to_string)
+        };
+        let string_array = |key: &str| {
+            value
+                .get(key)
+                .and_then(|v| v.as_array())
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|item| item.as_str().map(str::to_string))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        };
+
+        Ok(Self {
+            goal: String::new(),
+            diff_path,
+            context_path: optional_string("context_path"),
+            test_log_path: optional_string("test_log_path"),
+            build_log_path: optional_string("build_log_path"),
+            focus: string_array("focus"),
+            constraints: string_array("constraints"),
+            base_branch: optional_string("base_branch"),
+            working_branch: optional_string("working_branch"),
+        })
+    }
 
     /// Build from a ReviewDiffInput (convenience for the review_diff tool).
+    #[allow(dead_code)]
     pub fn from_review_diff_input(input: &crate::tools::review_diff::ReviewDiffInput) -> Self {
         Self {
             goal: input.goal.clone(),
@@ -33,7 +102,12 @@ impl ContextProjection {
     }
 
     /// Build a BackendRequest from this context projection.
-    pub fn to_backend_request(&self, operation: &str, output_schema: &str) -> crate::backends::BackendRequest {
+    #[allow(dead_code)]
+    pub fn to_backend_request(
+        &self,
+        operation: &str,
+        output_schema: &str,
+    ) -> crate::backends::BackendRequest {
         crate::backends::BackendRequest {
             goal: self.goal.clone(),
             operation: operation.to_string(),

@@ -1,4 +1,4 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 
 use coagent_runtime_core::{
     kernel::{RuntimeConfig, RuntimeKernel},
@@ -20,21 +20,46 @@ mod pipeline;
 mod tools;
 
 use backends::{
-    agent_profile::AgentProfile,
+    AgentBackend,
     acp_backend::{AcpBackend, MockBackend},
+    agent_profile::AgentProfile,
     backend_trait::{BackendRegistry, BackendSelector, DefaultBackendSelector},
     context::ContextProjection,
     mock::PureReviewResult,
-    AgentBackend,
 };
-use tools::tool_spec::ToolSpecRegistry;
-use config::Config;
+use config::{BackendId, Config};
 use pipeline::{ArtifactPaths, ExecutorContext, RuntimeToolExecutor, ValidationError};
 use tools::review_diff::{CoagentReviewWrapper, ReviewDiffInput, ReviewMetadata};
+use tools::tool_spec::ToolSpecRegistry;
 
 #[derive(Clone)]
 struct CoagentServer {
     executor: RuntimeToolExecutor,
+}
+
+fn select_startup_backend(
+    backend_override: Option<BackendId>,
+    tool_spec: &tools::tool_spec::ToolSpec,
+    mock_backend: Arc<dyn AgentBackend>,
+    reasonix_backend: Arc<dyn AgentBackend>,
+) -> Arc<dyn AgentBackend> {
+    match backend_override {
+        Some(BackendId::Mock) => mock_backend,
+        Some(BackendId::Reasonix) => reasonix_backend,
+        None => {
+            let selector = DefaultBackendSelector;
+            let selected_id = selector.select(
+                &tool_spec.required_capability,
+                &tool_spec.default_backend_id,
+                &[reasonix_backend.as_ref(), mock_backend.as_ref()],
+            );
+            if selected_id == reasonix_backend.backend_id() {
+                reasonix_backend
+            } else {
+                mock_backend
+            }
+        }
+    }
 }
 
 #[tool_router]
@@ -105,8 +130,7 @@ impl CoagentServer {
                                 "working_branch": ctx.working_branch,
                             }),
                         };
-                        let response = backend.invoke(request).await
-                            .map_err(|e| e.to_string())?;
+                        let response = backend.invoke(request).await.map_err(|e| e.to_string())?;
                         serde_json::from_value(response.payload)
                             .map_err(|e| format!("deserialize review: {e}"))
                     }
@@ -118,12 +142,12 @@ impl CoagentServer {
                         .map_err(|e| ValidationError::new(e.path, e.message))
                 },
                 // Wrapper construction closure
-                |review: PureReviewResult| CoagentReviewWrapper {
+                |review: PureReviewResult, task_id: &str, request_id: &str| CoagentReviewWrapper {
                     review,
                     metadata: ReviewMetadata {
                         schema_version: "review_result_v1".into(),
-                        task_id: String::new(), // filled by executor from IDs
-                        request_id: String::new(), // filled by executor from IDs
+                        task_id: task_id.into(),
+                        request_id: request_id.into(),
                         status: "ok".into(),
                         operation: "coagent.review_diff".into(),
                         runtime_decision: "allow".into(),
@@ -150,13 +174,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .clone();
     // Build BackendRegistry with available backends
     let mut backend_registry = BackendRegistry::new();
-    let mock_backend = std::sync::Arc::new(MockBackend::new("mock"));
-    backend_registry.register(Box::new(MockBackend::new("mock")));
+    let mock_backend: Arc<dyn AgentBackend> = Arc::new(MockBackend::new("mock"));
+    backend_registry.register_arc(mock_backend.clone());
 
-    let reasonix_backend: std::sync::Arc<dyn AgentBackend> = std::sync::Arc::new(
-        AcpBackend::new(AgentProfile::reasonix(config.repo_root.clone(), &config.reasonix_model)),
-    );
-    backend_registry.register(Box::new(AcpBackend::new(AgentProfile::reasonix(config.repo_root.clone(), &config.reasonix_model))));
+    let reasonix_backend: Arc<dyn AgentBackend> = Arc::new(AcpBackend::new(
+        AgentProfile::reasonix(config.repo_root.clone(), &config.reasonix_model),
+    ));
+    backend_registry.register_arc(reasonix_backend.clone());
 
     // Build ToolSpec registry
     let tool_registry = ToolSpecRegistry::default_registry();
@@ -164,17 +188,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get("coagent.review_diff")
         .expect("coagent.review_diff tool spec");
 
-    // Select backend: capability-based with fallback
-    let selector = DefaultBackendSelector;
-    let selected_id = selector.select(
-        &tool_spec.required_capability,
-        &tool_spec.default_backend_id,
-        &[reasonix_backend.as_ref(), mock_backend.as_ref()],
+    let backend = select_startup_backend(
+        config.backend_override,
+        tool_spec,
+        mock_backend.clone(),
+        reasonix_backend.clone(),
     );
-    let backend: std::sync::Arc<dyn AgentBackend> = match selected_id.as_str() {
-        "reasonix" => reasonix_backend,
-        _ => std::sync::Arc::new(MockBackend::new("mock")),
-    };
 
     let kernel = RuntimeKernel::initialize(RuntimeConfig {
         repo_root: config.repo_root.clone(),
@@ -187,12 +206,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         require_external_ids: config.require_external_ids,
         kernel: Arc::new(Mutex::new(kernel)),
         backend: backend.clone(),
-        backend_registry: Some(std::sync::Arc::new(backend_registry)),
-        backend_selector: Some(std::sync::Arc::new(DefaultBackendSelector)),
+        backend_registry: config
+            .backend_override
+            .is_none()
+            .then_some(Arc::new(backend_registry)),
         schema_registry: Arc::new(schema_registry),
         tool: review_tool,
         required_capability: "code.review.diff".into(),
         default_backend_id: "mock".into(),
+        complete_task_on_success: true,
     });
 
     let server = CoagentServer { executor };
@@ -212,7 +234,16 @@ fn embedded_schema_registry() -> Result<SchemaRegistry, SchemaError> {
 
 #[cfg(test)]
 mod tests {
+    use super::select_startup_backend;
     use crate::backends::mock::{Finding, PureReviewResult, Severity};
+    use crate::backends::{
+        AgentBackend,
+        acp_backend::{AcpBackend, MockBackend},
+        agent_profile::AgentProfile,
+    };
+    use crate::config::BackendId;
+    use crate::tools::tool_spec::ToolSpec;
+    use std::{path::PathBuf, sync::Arc};
 
     #[test]
     fn review_finding_validation_rejects_empty_issue() {
@@ -266,5 +297,54 @@ mod tests {
             .validate()
             .expect_err("out-of-range confidence should be rejected");
         assert!(err.path.contains("confidence"));
+    }
+
+    #[test]
+    fn startup_backend_selection_respects_mock_override() {
+        let tool_spec = ToolSpec::review_diff();
+        let mock_backend: Arc<dyn AgentBackend> = Arc::new(MockBackend::new("mock"));
+        let reasonix_backend: Arc<dyn AgentBackend> = Arc::new(AcpBackend::new(
+            AgentProfile::reasonix(PathBuf::from("."), "fake-model"),
+        ));
+
+        let selected = select_startup_backend(
+            Some(BackendId::Mock),
+            &tool_spec,
+            mock_backend,
+            reasonix_backend,
+        );
+
+        assert_eq!(selected.backend_id(), "mock");
+    }
+
+    #[test]
+    fn startup_backend_selection_respects_reasonix_override() {
+        let tool_spec = ToolSpec::review_diff();
+        let mock_backend: Arc<dyn AgentBackend> = Arc::new(MockBackend::new("mock"));
+        let reasonix_backend: Arc<dyn AgentBackend> = Arc::new(AcpBackend::new(
+            AgentProfile::reasonix(PathBuf::from("."), "fake-model"),
+        ));
+
+        let selected = select_startup_backend(
+            Some(BackendId::Reasonix),
+            &tool_spec,
+            mock_backend,
+            reasonix_backend,
+        );
+
+        assert_eq!(selected.backend_id(), "reasonix");
+    }
+
+    #[test]
+    fn startup_backend_selection_uses_capability_when_unset() {
+        let tool_spec = ToolSpec::review_diff();
+        let mock_backend: Arc<dyn AgentBackend> = Arc::new(MockBackend::new("mock"));
+        let reasonix_backend: Arc<dyn AgentBackend> = Arc::new(AcpBackend::new(
+            AgentProfile::reasonix(PathBuf::from("."), "fake-model"),
+        ));
+
+        let selected = select_startup_backend(None, &tool_spec, mock_backend, reasonix_backend);
+
+        assert_eq!(selected.backend_id(), "reasonix");
     }
 }

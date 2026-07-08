@@ -1,6 +1,6 @@
 ﻿# Coagent
 
-Codex-Orchestrated Reasonix Runtime — single-binary Rust MCP server with a 10-state agent runtime core.
+Codex-Orchestrated Reasonix Runtime — single-binary Rust MCP server with a 9-state agent runtime core.
 
 ```
 Codex   = assigns work and makes the final decision
@@ -28,7 +28,7 @@ Codex MCP Host
   -> coagent-mcp-server.exe (~5 MB, single binary, zero dependencies)
       ├── Pipeline         RuntimeToolExecutor (8-stage unified execution)
       ├── RuntimeKernel    same-process state machine + policy engine + SQLite audit
-      │   ├── StateMachine 10-state FSM + per-operation steps
+      │   ├── StateMachine 9-state FSM + per-operation steps
       │   │                Queued→Running→Blocked/WaitingApproval/Retrying/PartiallyCompleted
       │   │                + subtask dependencies, timeout, cancel propagation
       │   ├── PolicyEngine dynamic ToolRegistry + approval gates + path sandbox
@@ -62,11 +62,11 @@ schemas/                    JSON Schema 2020-12 contracts
 MCP protocol (rmcp):                        implemented (official Rust SDK)
 RuntimeToolExecutor pipeline:               implemented (8-stage unified execution)
 Two-layer state machine:                    implemented (TaskState long-lived, per-op steps)
-10-state task FSM:                          implemented (9 alive states + Cancelled terminal)
+9-state task FSM:                           implemented
 Multi-operation tasks:                      implemented (complete_task() separate from complete_operation())
 Subtask dependencies + timeout/cancel:      implemented
 Dynamic tool registry:                      implemented (register/unregister/enable/disable/upgrade)
-Approval gate:                              implemented (RequireApproval → WaitingApproval → approve → resume)
+Approval gate:                              partial (RequireApproval response; approve/resume tools pending)
 Context projection:                         implemented (all 9 input fields reach Reasonix prompt)
 Finding type safety:                        implemented (Finding struct + Severity enum, dual-layer validation)
 ID orchestration:                           implemented (COAGENT_REQUIRE_EXTERNAL_IDS)

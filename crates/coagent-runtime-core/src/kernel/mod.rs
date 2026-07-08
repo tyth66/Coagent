@@ -1,4 +1,4 @@
-﻿use std::path::PathBuf;
+use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -7,6 +7,7 @@ use crate::{
     artifact::ArtifactPolicyError,
     policy::{PolicyEngine, RuntimeOperationRequest, ToolRegistry},
     state::{TaskState, TaskStateValue},
+    storage::SchemaValidationRecord,
     storage::{AuditEventInput, AuditEventRecord, RuntimeDecisionRecord, RuntimeStore, StoreError},
 };
 
@@ -147,6 +148,48 @@ impl RuntimeKernel {
         })?)
     }
 
+    pub fn record_schema_validation(
+        &mut self,
+        task_id: &str,
+        request_id: Option<&str>,
+        expected_schema: &str,
+        stage: &str,
+        valid: bool,
+        errors_json: String,
+    ) -> Result<AuditWriteResult, RuntimeError> {
+        let audit = AuditEventInput {
+            task_id: task_id.to_string(),
+            event_type: format!(
+                "{stage}_schema_validation_{}",
+                if valid { "passed" } else { "failed" }
+            ),
+            summary: format!(
+                "{stage} schema validation {} for {expected_schema}",
+                if valid { "passed" } else { "failed" }
+            ),
+            payload_json: json!({
+                "task_id": task_id,
+                "request_id": request_id,
+                "stage": stage,
+                "expected_schema": expected_schema,
+                "valid": valid,
+                "errors": serde_json::from_str::<serde_json::Value>(&errors_json)
+                    .unwrap_or(serde_json::Value::Null)
+            })
+            .to_string(),
+        };
+        let validation = SchemaValidationRecord {
+            task_id: task_id.to_string(),
+            request_id: request_id.map(str::to_string),
+            expected_schema: expected_schema.to_string(),
+            valid,
+            errors_json,
+        };
+        Ok(self
+            .store
+            .commit_schema_validation_with_audit(&validation, &audit)?)
+    }
+
     /// Close an operation step as completed. Does NOT transition the task to terminal.
     /// The task remains in its current state, allowing multiple operations per task.
     /// Use complete_task() for task-level terminal transitions (P2: two-layer state machine).
@@ -223,8 +266,6 @@ impl RuntimeKernel {
         Ok(state.value())
     }
 
-    
-
     /// Start a new attempt for an operation. Returns the attempt row ID.
     pub fn start_attempt(
         &mut self,
@@ -233,10 +274,12 @@ impl RuntimeKernel {
         operation: &str,
         backend_id: &str,
     ) -> Result<(i64, u32), RuntimeError> {
-        let next_number = self.store.next_attempt_number(task_id, request_id, operation)?;
-        let id = self.store.record_attempt(
-            task_id, request_id, operation, backend_id, next_number,
-        )?;
+        let next_number = self
+            .store
+            .next_attempt_number(task_id, request_id, operation)?;
+        let id =
+            self.store
+                .record_attempt(task_id, request_id, operation, backend_id, next_number)?;
         Ok((id, next_number))
     }
 

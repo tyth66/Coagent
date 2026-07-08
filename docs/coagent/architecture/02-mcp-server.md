@@ -7,7 +7,7 @@ The MCP server is built with `rmcp` (official Rust MCP SDK, 14.7M downloads).
 ```rust
 #[tool_router]
 impl CoagentServer {
-    #[tool(name = "reasonix.review_diff", description = "...")]
+    #[tool(name = "coagent.review_diff", description = "...")]
     async fn review_diff(
         &self,
         Parameters(input): Parameters<ReviewDiffInput>,
@@ -53,7 +53,7 @@ enum Backend {
 }
 ```
 
-`COAGENT_BACKEND=mock|reasonix` overrides the registered tool's backend binding.
+`COAGENT_BACKEND=mock|reasonix` overrides capability-based backend selection.
 
 ## Reasonix ACP Session Recovery
 
@@ -100,8 +100,7 @@ and `request_id`. Pipeline returns `invalid_params` if missing. Default
 ## Tool Name (v3)
 
 The MCP tool is registered as `coagent.review_diff`. The legacy name
-`reasonix.review_diff` is preserved as a ToolRegistry alias for backward
-compatibility.
+`reasonix.review_diff` is not exposed by the current MCP router.
 
 ## Tool Specification (v3)
 
@@ -133,8 +132,7 @@ Selection is capability-based via `BackendSelector`.
 
 Each backend invocation is tracked in the `operation_attempts` table.
 The kernel API (`start_attempt` / `complete_attempt` / `fail_attempt`)
-is available and will be wired into the pipeline for per-operation
-attempt lifecycle management.
+is wired into the pipeline for per-operation attempt lifecycle management.
 ## Deployment
 
 ```powershell

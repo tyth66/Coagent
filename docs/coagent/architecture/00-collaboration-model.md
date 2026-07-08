@@ -21,7 +21,7 @@ Codex MCP Host
       ├── Pipeline         RuntimeToolExecutor — 8-stage unified execution
       ├── ToolRegistry     ToolSpec-based declarative tool registration
       ├── RuntimeKernel    same-process state machine + policy engine + SQLite audit
-      │   ├── 10-state FSM queued/running/blocked/waiting-approval/retrying/
+      │   ├── 9-state FSM queued/running/blocked/waiting-approval/retrying/
       │   │               partially-completed/completed/failed/cancelled
       │   ├── Per-operation steps (multi-op tasks via complete_task())
       │   ├── operation_attempts table (3-layer task/operation/attempt)
@@ -57,7 +57,7 @@ Codex MCP Host
 
 ## Current Scope
 
-One MCP tool: `coagent.review_diff` (with `reasonix.review_diff` legacy alias)
+One MCP tool: `coagent.review_diff`
 
 Multi-backend, multi-tool, and multi-session patterns are designed
 (via AgentBackend trait, ToolSpec, BackendRegistry) and ready for

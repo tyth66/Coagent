@@ -1,13 +1,12 @@
 ﻿use coagent_runtime_core::policy::PermissionLevel;
 
-use crate::backends::{AgentBackend, BackendCapabilities};
-
 /// Declarative specification for a Coagent MCP tool.
 ///
 /// Each tool is defined by its schema, permissions, artifact policy,
 /// and backend selection criteria. The RuntimeToolExecutor reads
 /// ToolSpec to drive the execute pipeline — no per-tool handler code.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct ToolSpec {
     /// MCP tool name (e.g. "coagent.review_diff").
     pub name: String,
@@ -70,6 +69,7 @@ impl ToolSpecRegistry {
         self.specs.iter().find(|s| s.name == name)
     }
 
+    #[allow(dead_code)]
     pub fn list_names(&self) -> Vec<String> {
         self.specs.iter().map(|s| s.name.clone()).collect()
     }
@@ -83,14 +83,6 @@ impl ToolSpecRegistry {
         // registry.register(ToolSpec::security_audit());
         registry
     }
-}
-
-/// Select a backend for a given tool spec from the backend registry.
-pub fn select_backend<'a>(
-    spec: &ToolSpec,
-    backends: &'a crate::backends::BackendRegistry,
-) -> &'a dyn AgentBackend {
-    backends.select_by_tag(&spec.required_capability, &spec.default_backend_id)
 }
 
 #[cfg(test)]

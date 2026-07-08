@@ -1,5 +1,4 @@
-﻿pub mod acp_backend;
-pub mod acp_client;
+pub mod acp_backend;
 pub mod agent_profile;
 pub mod backend_trait;
 
@@ -7,24 +6,28 @@ pub mod context;
 pub mod mock;
 pub mod reasonix;
 
-use std::path::Path;
-
-use coagent_runtime_core::policy::{BackendBinding, ToolDefinition};
-
-use crate::config::BackendId;
-
 // Re-export the new v3 trait and types
 // v3 trait re-exports — used by acp_backend.rs and future tool specs
-pub use backend_trait::{AgentBackend, BackendCapabilities, BackendError, BackendRegistry, BackendRequest, BackendResponse, BackendSelector, DefaultBackendSelector, PreferredBackendSelector};
+pub use backend_trait::{AgentBackend, BackendRegistry, BackendRequest};
+
+#[cfg(test)]
+use crate::config::BackendId;
+#[cfg(test)]
+use coagent_runtime_core::policy::{BackendBinding, ToolDefinition};
+#[cfg(test)]
+use std::path::Path;
 
 // Legacy v2 Backend enum — kept for backward compatibility during transition.
 // New code should use AgentBackend trait via BackendRegistry.
+#[cfg(test)]
 #[derive(Clone)]
+#[allow(dead_code)]
 pub enum Backend {
     Mock,
     Reasonix(reasonix::ReasonixRunner),
 }
 
+#[cfg(test)]
 impl Backend {
     pub fn from_config(backend_id: BackendId, reasonix_model: &str, repo_root: &Path) -> Self {
         match backend_id {
