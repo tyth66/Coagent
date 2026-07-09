@@ -32,6 +32,7 @@ use backends::{
 };
 use config::{BackendId, Config};
 use pipeline::{ArtifactPaths, ExecutorContext, RuntimeToolExecutor, ValidationError};
+use tools::rescue::RescueInput;
 use tools::review_diff::{CoagentReviewWrapper, ReviewDiffInput, ReviewMetadata};
 use tools::tool_spec::ToolSpecRegistry;
 
@@ -185,6 +186,66 @@ impl CoagentServer {
     }
     
     
+    
+    #[tool(
+        name = "coagent.rescue",
+        description = "Delegate an investigation, fix request, or follow-up task to a Coagent backend."
+    )]
+    async fn rescue(
+        &self,
+        Parameters(input): Parameters<RescueInput>,
+    ) -> Result<CallToolResult, ErrorData> {
+        // Rescue reuses the review_diff pipeline: same backend output type, same validation, same wrapper.
+        // The only difference is the input schema (rescue_input_v1 vs review_diff_input_v1).
+        let artifact_paths = ArtifactPaths::collect_read(
+            ".agent/diffs/current.diff",
+            &[],
+        );
+
+        let goal = input.goal.clone();
+        let diff_path = ".agent/diffs/current.diff".to_string();
+        let context = ContextProjection::from_input(
+            goal.clone(),
+            diff_path,
+            None, None, None,
+            input.focus.clone(),
+            input.constraints.clone(),
+            None, None,
+        );
+
+        self.executor
+            .execute(
+                input.task_id.clone(),
+                input.request_id.clone(),
+                &input,
+                artifact_paths,
+                |backend: std::sync::Arc<dyn AgentBackend>| {
+                    let ctx = context.clone();
+                    async move {
+                        let request = ctx.to_backend_request("coagent.rescue", "pure_review_result_v1");
+                        let response = backend.invoke(request).await.map_err(|e| e.to_string())?;
+                        serde_json::from_value(response.payload)
+                            .map_err(|e| format!("deserialize rescue: {e}"))
+                    }
+                },
+                |review: &PureReviewResult| {
+                    review.validate()
+                        .map_err(|e| ValidationError::new(e.path, e.message))
+                },
+                |review: PureReviewResult, task_id: &str, request_id: &str| CoagentReviewWrapper {
+                    review,
+                    metadata: ReviewMetadata {
+                        schema_version: "review_result_v1".into(),
+                        task_id: task_id.into(),
+                        request_id: request_id.into(),
+                        status: "ok".into(),
+                        operation: "coagent.rescue".into(),
+                        runtime_decision: "allow".into(),
+                    },
+                },
+            )
+            .await
+    }
     #[tool(
         name = "coagent.task_result",
         description = "Get a summary of a Coagent task including its state and recent decisions."

@@ -345,15 +345,15 @@
                 "timeout_count",
                 "protocol_error_count",
                 "io_error_count",
-              "spawn_error_count",
-              "tool_call_count",
-              "tool_call_update_count",
-              "completed_tool_call_count",
-              "failed_tool_call_count",
-              "permission_request_count",
-              "auto_allowed_permission_count",
-              "auto_rejected_permission_count",
-              "last_error"
+                "spawn_error_count",
+                "tool_call_count",
+                "tool_call_update_count",
+                "completed_tool_call_count",
+                "failed_tool_call_count",
+                "permission_request_count",
+                "auto_allowed_permission_count",
+                "auto_rejected_permission_count",
+                "last_error"
               ],
               "additionalProperties": false,
               "properties": {
@@ -388,35 +388,35 @@
                   "type": "integer",
                   "minimum": 0
                 },
-              "tool_call_count": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "tool_call_update_count": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "completed_tool_call_count": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "failed_tool_call_count": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "permission_request_count": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "auto_allowed_permission_count": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "auto_rejected_permission_count": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "last_error": {
+                "tool_call_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "tool_call_update_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "completed_tool_call_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "failed_tool_call_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "permission_request_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "auto_allowed_permission_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "auto_rejected_permission_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "last_error": {
                   "type": [
                     "string",
                     "null"
@@ -425,6 +425,60 @@
               }
             }
           ]
+        }
+      }
+    },
+    "rescue_input_v1": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "goal",
+        "repo_root",
+        "permission_level",
+        "output_schema"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "rescue_input_v1"
+        },
+        "task_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repo_root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "focus": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "permission_level": {
+          "const": "L1_DIFF_REVIEW"
+        },
+        "output_schema": {
+          "const": "review_result_v1"
         }
       }
     }

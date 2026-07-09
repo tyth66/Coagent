@@ -251,3 +251,46 @@ async fn runtime_status_reports_mock_backend_without_invoking_reasonix() {
     );
     assert!(status["reasonix"].is_null());
 }
+
+
+#[test]
+fn rescue_input_valid_passes_schema_validation() {
+    use coagent_runtime_core::schema::SchemaRegistry;
+
+    let registry = SchemaRegistry::load_from_str(
+        "coagent-v1.schema.json",
+        include_str!("../../../schemas/coagent-v1.schema.json"),
+    )
+    .expect("load schema");
+
+    let valid = serde_json::json!({
+        "schema_version": "rescue_input_v1",
+        "goal": "Investigate why tests are failing",
+        "repo_root": "/test/repo",
+        "permission_level": "L1_DIFF_REVIEW",
+        "output_schema": "review_result_v1"
+    });
+    let result = registry.validate("rescue_input_v1", &valid);
+    assert!(result.valid, "valid rescue input should pass");
+}
+
+#[test]
+fn rescue_input_rejects_empty_goal() {
+    use coagent_runtime_core::schema::SchemaRegistry;
+
+    let registry = SchemaRegistry::load_from_str(
+        "coagent-v1.schema.json",
+        include_str!("../../../schemas/coagent-v1.schema.json"),
+    )
+    .expect("load schema");
+
+    let invalid = serde_json::json!({
+        "schema_version": "rescue_input_v1",
+        "goal": "",
+        "repo_root": "/test/repo",
+        "permission_level": "L1_DIFF_REVIEW",
+        "output_schema": "review_result_v1"
+    });
+    let result = registry.validate("rescue_input_v1", &invalid);
+    assert!(!result.valid, "empty goal should be rejected");
+}
