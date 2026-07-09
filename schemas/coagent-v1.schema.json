@@ -345,10 +345,12 @@
                 "timeout_count",
                 "protocol_error_count",
                 "io_error_count",
-                "spawn_error_count",
-                "tool_call_count",
-                "denied_tool_call_count",
-                "last_error"
+              "spawn_error_count",
+              "tool_call_count",
+              "tool_call_update_count",
+              "completed_tool_call_count",
+              "failed_tool_call_count",
+              "last_error"
               ],
               "additionalProperties": false,
               "properties": {
@@ -383,15 +385,23 @@
                   "type": "integer",
                   "minimum": 0
                 },
-                "tool_call_count": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "denied_tool_call_count": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "last_error": {
+              "tool_call_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tool_call_update_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "completed_tool_call_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed_tool_call_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "last_error": {
                   "type": [
                     "string",
                     "null"

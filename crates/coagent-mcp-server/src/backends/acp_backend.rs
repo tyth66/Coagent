@@ -52,7 +52,9 @@ pub struct ReasonixRuntimeStatus {
     pub io_error_count: u64,
     pub spawn_error_count: u64,
     pub tool_call_count: u64,
-    pub denied_tool_call_count: u64,
+    pub tool_call_update_count: u64,
+    pub completed_tool_call_count: u64,
+    pub failed_tool_call_count: u64,
     pub last_error: Option<String>,
 }
 
@@ -68,7 +70,9 @@ impl From<ReasonixRunnerStats> for ReasonixRuntimeStatus {
             io_error_count: stats.io_error_count,
             spawn_error_count: stats.spawn_error_count,
             tool_call_count: stats.tool_call_count,
-            denied_tool_call_count: stats.denied_tool_call_count,
+            tool_call_update_count: stats.tool_call_update_count,
+            completed_tool_call_count: stats.completed_tool_call_count,
+            failed_tool_call_count: stats.failed_tool_call_count,
             last_error: stats.last_error,
         }
     }

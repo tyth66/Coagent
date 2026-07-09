@@ -132,7 +132,7 @@ impl AcpSession {
         .await?;
 
         let mut collected_text = String::new();
-        let mut tool_calls = 0u64;
+        let mut observed_tool_calls = 0u64;
         loop {
             let line = tokio::time::timeout_at(deadline, read_line(&mut self.reader))
                 .await
@@ -172,25 +172,28 @@ impl AcpSession {
                         if let Some(review) = try_parse_review(&collected_text) {
                             return Ok(review);
                         }
-                        let tool_call_id = update
-                            .get("toolCallId")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("unknown");
-                        self.deny_tool_call(tool_call_id).await.map_err(|e| {
-                            ReasonixError::Protocol(format!("deny_tool_call failed: {e}"))
-                        })?;
-                        tool_calls += 1;
+                        observed_tool_calls += 1;
                         {
                             let mut stats = stats.lock().expect("stats in send_prompt");
                             stats.tool_call_count += 1;
-                            stats.denied_tool_call_count += 1;
                         }
-                        if tool_calls >= ReasonixRunner::MAX_TOOL_CALLS_PER_PROMPT {
+                        if observed_tool_calls >= ReasonixRunner::MAX_OBSERVED_TOOL_CALLS_PER_PROMPT
+                        {
                             return Err(ReasonixError::Protocol(format!(
-                                "max tool calls ({}) exceeded: {} consecutive denied tool_calls",
-                                ReasonixRunner::MAX_TOOL_CALLS_PER_PROMPT,
-                                tool_calls
+                                "max observed tool calls ({}) exceeded: {} tool_call events before review JSON",
+                                ReasonixRunner::MAX_OBSERVED_TOOL_CALLS_PER_PROMPT,
+                                observed_tool_calls
                             )));
+                        }
+                    }
+                    Some("tool_call_update") => {
+                        let status = update.get("status").and_then(|v| v.as_str());
+                        let mut stats = stats.lock().expect("stats in send_prompt");
+                        stats.tool_call_update_count += 1;
+                        match status {
+                            Some("completed") => stats.completed_tool_call_count += 1,
+                            Some("failed") => stats.failed_tool_call_count += 1,
+                            _ => {}
                         }
                     }
                     _ => {}
@@ -199,24 +202,6 @@ impl AcpSession {
         }
 
         parse_review_text(&collected_text)
-    }
-
-    async fn deny_tool_call(&mut self, tool_call_id: &str) -> Result<(), ReasonixError> {
-        send_frame(
-            &mut self.stdin,
-            0,
-            "session/tool/result",
-            &serde_json::json!({
-                "sessionId": self.session_id,
-                "toolCallId": tool_call_id,
-                "status": "error",
-                "error": {
-                    "message": "tool unsupported in single-lane review_diff baseline",
-                    "code": "TOOL_UNSUPPORTED"
-                }
-            }),
-        )
-        .await
     }
 }
 
@@ -248,13 +233,15 @@ pub struct ReasonixRunnerStats {
     pub io_error_count: u64,
     pub spawn_error_count: u64,
     pub tool_call_count: u64,
-    pub denied_tool_call_count: u64,
+    pub tool_call_update_count: u64,
+    pub completed_tool_call_count: u64,
+    pub failed_tool_call_count: u64,
     pub last_error: Option<String>,
 }
 
 impl ReasonixRunner {
-    /// Maximum number of tool_calls the runner will reject before failing the prompt.
-    const MAX_TOOL_CALLS_PER_PROMPT: u64 = 5;
+    /// Maximum observed pre-review tool_call events before failing the prompt.
+    const MAX_OBSERVED_TOOL_CALLS_PER_PROMPT: u64 = 5;
 
     pub fn new(model: impl Into<String>, cwd: PathBuf) -> Self {
         Self {
@@ -440,7 +427,7 @@ impl ReasonixError {
     /// Errors that are safe to retry once after reconnecting.
     fn is_retryable(&self) -> bool {
         matches!(self, Self::Io(_) | Self::Protocol(_))
-            && !self.to_string().contains("max tool calls")
+            && !self.to_string().contains("max observed tool calls")
     }
 }
 
@@ -835,7 +822,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn reasonix_denies_tool_call_before_review_and_then_collects_review() {
+    async fn reasonix_observes_tool_call_before_review_without_sending_tool_result() {
         let _guard = ENV_LOCK.lock().await;
         let fake = FakeReasonix::new("tool-call-before-review");
         let _env = TestEnv::set(&[
@@ -859,9 +846,16 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.verdict, "needs_fix");
+        assert_eq!(
+            fake.count("session_tool_result"),
+            0,
+            "Reasonix tool_call is an internal event notification, not a host-tool request"
+        );
         let stats = runner.stats();
         assert_eq!(stats.tool_call_count, 1);
-        assert_eq!(stats.denied_tool_call_count, 1);
+        assert_eq!(stats.tool_call_update_count, 1);
+        assert_eq!(stats.completed_tool_call_count, 1);
+        assert_eq!(stats.failed_tool_call_count, 0);
         assert_eq!(stats.prompt_count, 1);
     }
 
@@ -887,16 +881,13 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(error, ReasonixError::Protocol(_)));
-        assert!(error.to_string().contains("max tool calls"));
+        assert!(error.to_string().contains("max observed tool calls"));
         let stats = runner.stats();
         assert_eq!(
             stats.tool_call_count,
-            ReasonixRunner::MAX_TOOL_CALLS_PER_PROMPT
+            ReasonixRunner::MAX_OBSERVED_TOOL_CALLS_PER_PROMPT
         );
-        assert_eq!(
-            stats.denied_tool_call_count,
-            ReasonixRunner::MAX_TOOL_CALLS_PER_PROMPT
-        );
+        assert_eq!(stats.tool_call_update_count, 0);
     }
 
     #[tokio::test]
@@ -1321,7 +1312,20 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
                 }
             }
             Start-Sleep -Milliseconds 100
-            # After denying tool_call, emit review JSON chunks
+            Write-Frame @{
+                jsonrpc = "2.0"
+                method = "session/update"
+                params = @{
+                    sessionId = "fake-session"
+                    update = @{
+                        sessionUpdate = "tool_call_update"
+                        toolCallId = "call_before_review"
+                        status = "completed"
+                        content = @(@{ type = "text"; text = "internal tool completed" })
+                    }
+                }
+            }
+            # Reasonix emits its own tool_call_update, then continues with review JSON chunks.
             foreach ($chunk in @(
                 '{"verdict":"needs_fix","summary":"Fake ACP review.",';
                 '"findings":[],"tests_to_run":["cargo test -p coagent-mcp-server"],';
@@ -1363,6 +1367,9 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
         }
 
         Write-Frame @{ jsonrpc = "2.0"; id = $msg.id; result = @{ stopReason = "end_turn" } }
+    }
+    elseif ($msg.method -eq "session/tool/result") {
+        Increment-Count "session_tool_result"
     }
 }
 "#
@@ -1446,9 +1453,10 @@ while IFS= read -r line; do
     fi
     if [ "$case_name" = "tool_call_before_review" ]; then
       printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"fake-session","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"let me think..."}}}}\n'
-      printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"fake-session","update":{"sessionUpdate":"tool_call","toolCallId":"call_before_review","title":"task","kind":"other","status":"pending","rawInput":{"description":"need a tool before reviewing"}}}}\n'
-      sleep 0.1
-      printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"fake-session","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"verdict\":\"needs_fix\",\"summary\":\"Fake ACP review.\","}}}}\n'
+	      printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"fake-session","update":{"sessionUpdate":"tool_call","toolCallId":"call_before_review","title":"task","kind":"other","status":"pending","rawInput":{"description":"need a tool before reviewing"}}}}\n'
+	      sleep 0.1
+	      printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"fake-session","update":{"sessionUpdate":"tool_call_update","toolCallId":"call_before_review","status":"completed","content":[{"type":"text","text":"internal tool completed"}]}}}\n'
+	      printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"fake-session","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"verdict\":\"needs_fix\",\"summary\":\"Fake ACP review.\","}}}}\n'
       printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"fake-session","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"\"findings\":[],\"tests_to_run\":[\"cargo test -p coagent-mcp-server\"],"}}}}\n'
       printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"fake-session","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"\"risks\":[],\"assumptions\":[],\"confidence\":0.73}"}}}}\n'
     fi
@@ -1460,6 +1468,8 @@ while IFS= read -r line; do
       exit 0
     fi
     printf '{"jsonrpc":"2.0","id":%s,"result":{"stopReason":"end_turn"}}\n' "$id"
+  elif [ "$method" = "session/tool/result" ]; then
+    increment_count session_tool_result
   fi
 done
 "#
