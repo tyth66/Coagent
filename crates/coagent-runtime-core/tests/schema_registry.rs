@@ -66,6 +66,9 @@ fn valid_runtime_status() -> serde_json::Value {
             "tool_call_update_count": 0,
             "completed_tool_call_count": 0,
             "failed_tool_call_count": 0,
+            "permission_request_count": 0,
+            "auto_allowed_permission_count": 0,
+            "auto_rejected_permission_count": 0,
             "last_error": null
         }
     })

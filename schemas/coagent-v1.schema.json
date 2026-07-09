@@ -350,6 +350,9 @@
               "tool_call_update_count",
               "completed_tool_call_count",
               "failed_tool_call_count",
+              "permission_request_count",
+              "auto_allowed_permission_count",
+              "auto_rejected_permission_count",
               "last_error"
               ],
               "additionalProperties": false,
@@ -398,6 +401,18 @@
                 "minimum": 0
               },
               "failed_tool_call_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "permission_request_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "auto_allowed_permission_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "auto_rejected_permission_count": {
                 "type": "integer",
                 "minimum": 0
               },

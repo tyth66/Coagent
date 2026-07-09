@@ -160,7 +160,25 @@ impl AcpSession {
                         .await?;
                     }
                     _ => {
-                        eprintln!("[coagent] ignoring unrecognized outbound request: {m}");
+                        eprintln!(
+                            "[coagent] unrecognized outbound request, returning method_not_found: {m}"
+                        );
+                        let error_frame = serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "id": msg.get("id"),
+                            "error": {
+                                "code": -32601,
+                                "message": format!("method not found: {m}")
+                            }
+                        });
+                        self.stdin
+                            .write_all(format!("{}\n", error_frame).as_bytes())
+                            .await
+                            .map_err(|e| ReasonixError::Io(e.to_string()))?;
+                        self.stdin
+                            .flush()
+                            .await
+                            .map_err(|e| ReasonixError::Io(e.to_string()))?;
                     }
                 }
                 continue;
@@ -324,10 +342,10 @@ fn handle_permission_request(
     let allowed = is_read_only_tool(title, kind);
     let outcome = if allowed {
         stats.auto_allowed_permission_count += 1;
-        serde_json::json!({ "outcome": "selected", "optionId": "allow_once" })
+        serde_json::json!({ "outcome": { "outcome": "selected", "optionId": "allow_once" } })
     } else {
         stats.auto_rejected_permission_count += 1;
-        serde_json::json!({ "outcome": "selected", "optionId": "reject_once" })
+        serde_json::json!({ "outcome": { "outcome": "selected", "optionId": "reject_once" } })
     };
 
     eprintln!(

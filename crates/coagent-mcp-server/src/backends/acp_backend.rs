@@ -55,6 +55,9 @@ pub struct ReasonixRuntimeStatus {
     pub tool_call_update_count: u64,
     pub completed_tool_call_count: u64,
     pub failed_tool_call_count: u64,
+    pub permission_request_count: u64,
+    pub auto_allowed_permission_count: u64,
+    pub auto_rejected_permission_count: u64,
     pub last_error: Option<String>,
 }
 
@@ -73,6 +76,9 @@ impl From<ReasonixRunnerStats> for ReasonixRuntimeStatus {
             tool_call_update_count: stats.tool_call_update_count,
             completed_tool_call_count: stats.completed_tool_call_count,
             failed_tool_call_count: stats.failed_tool_call_count,
+            permission_request_count: stats.permission_request_count,
+            auto_allowed_permission_count: stats.auto_allowed_permission_count,
+            auto_rejected_permission_count: stats.auto_rejected_permission_count,
             last_error: stats.last_error,
         }
     }
