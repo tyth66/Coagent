@@ -459,6 +459,29 @@ impl RuntimeKernel {
     pub fn list_jobs(&self) -> Result<Vec<serde_json::Value>, RuntimeError> {
         Ok(self.store.list_active_tasks()?)
     }
+    /// Cancel a running or queued task. Terminal states reject cancellation.
+    pub fn cancel_task(&mut self, task_id: &str) -> Result<TaskStateValue, RuntimeError> {
+        let mut state = self.store
+            .load_task_state(task_id)
+            .map_err(RuntimeError::Store)?;
+        state
+            .transition_to(TaskStateValue::Cancelled)
+            .map_err(|e| RuntimeError::Store(
+                StoreError::InvalidTaskState(format!("{e:?}"))
+            ))?;
+
+        let audit = AuditEvent {
+            task_id: task_id.to_string(),
+            event_type: "task_cancelled".into(),
+            summary: format!("Task {task_id} cancelled"),
+            payload_json: serde_json::json!({"task_id": task_id}).to_string(),
+        };
+        self.write_audit(audit)?;
+        self.store.upsert_task_state(&state)
+            .map_err(RuntimeError::Store)?;
+        Ok(state.value())
+    }
+
 }
 
 impl RuntimeDecision {

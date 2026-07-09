@@ -183,6 +183,32 @@ impl CoagentServer {
             .unwrap_or_else(|_| r#"[]"#.into());
         Ok(CallToolResult::success(vec![ContentBlock::text(text)]))
     }
+    
+    #[tool(
+        name = "coagent.cancel_task",
+        description = "Cancel a running or queued Coagent task."
+    )]
+    async fn cancel_task(
+        &self,
+        Parameters(params): Parameters<serde_json::Value>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let task_id = params.get("task_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ErrorData::invalid_params("task_id is required", None))?;
+        let new_state = {
+            let mut kernel = self.executor.ctx().kernel.lock().await;
+            kernel.cancel_task(task_id).map_err(|e| {
+                ErrorData::internal_error(format!("cancel_task failed: {e}"), None)
+            })?
+        };
+        let result = serde_json::json!({
+            "task_id": task_id,
+            "state": format!("{new_state:?}").to_lowercase()
+        });
+        Ok(CallToolResult::success(vec![ContentBlock::text(
+            serde_json::to_string(&result).unwrap_or_default()
+        )]))
+    }
     #[tool(
         name = "coagent.runtime_status",
         description = "Return the current Coagent runtime status without invoking any backend."

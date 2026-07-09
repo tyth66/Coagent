@@ -304,3 +304,65 @@ fn decision_merge_precedence_matches_blueprint() {
         RuntimeDecisionValue::Deny
     );
 }
+
+#[test]
+fn cancel_task_transitions_running_to_cancelled() {
+    let root = temp_repo("cancel_task");
+    let mut kernel = RuntimeKernel::initialize(config(root.clone())).expect("init");
+
+    let request = RuntimeOperationRequest {
+        task_id: "TASK-cancel-test".into(),
+        request_id: Some("REQ-1".into()),
+        operation: "coagent.review_diff".into(),
+        permission_level: PermissionLevel::L1DiffReview,
+        resources: ResourceSet {
+            read_paths: vec![".agent/diffs/test.diff".into()],
+            write_paths: vec![".agent/results/out.json".into()],
+            network: false,
+        },
+    };
+
+    // First evaluate to transition task to Running
+    let decision = kernel.evaluate_operation(request);
+    assert_eq!(decision.decision, RuntimeDecisionValue::Allow);
+
+    // Now cancel
+    let state = kernel.cancel_task("TASK-cancel-test").expect("cancel");
+    assert_eq!(state, TaskStateValue::Cancelled);
+
+    // Verify it's in the store as cancelled
+    let stored = RuntimeStore::initialize(&root).expect("reopen store");
+    let task_state = stored.load_task_state("TASK-cancel-test").expect("load");
+    assert_eq!(task_state.value(), TaskStateValue::Cancelled);
+
+    fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn cancel_task_on_terminal_is_error() {
+    let root = temp_repo("cancel_terminal");
+    let mut kernel = RuntimeKernel::initialize(config(root.clone())).expect("init");
+
+    let request = RuntimeOperationRequest {
+        task_id: "TASK-done".into(),
+        request_id: Some("REQ-1".into()),
+        operation: "coagent.review_diff".into(),
+        permission_level: PermissionLevel::L1DiffReview,
+        resources: ResourceSet {
+            read_paths: vec![".agent/diffs/test.diff".into()],
+            write_paths: vec![".agent/results/out.json".into()],
+            network: false,
+        },
+    };
+    kernel.evaluate_operation(request);
+
+    // Complete the task first
+    kernel.complete_task("TASK-done").expect("complete");
+
+    // Cancelling a completed task should fail
+    let result = kernel.cancel_task("TASK-done");
+    assert!(result.is_err());
+
+    fs::remove_dir_all(&root).ok();
+}
+

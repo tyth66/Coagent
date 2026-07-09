@@ -88,7 +88,21 @@ function Invoke-Status {
 function Invoke-Cancel {
     $repoRoot = Get-RepoRoot
     $jobId = if ($Arguments.Count -gt 0) { $Arguments[0] } else { $null }
-    Write-Output (@{ status = 'not_implemented'; jobId = $jobId } | ConvertTo-Json -Compress)
+
+    if (-not $jobId) {
+        $jobs = Read-Jobs $repoRoot
+        $active = $jobs | Where-Object { $_.status -eq "queued" -or $_.status -eq "running" }
+        if ($active.Count -eq 0) {
+            Write-Output (@{ status = "error"; message = "No active jobs to cancel" } | ConvertTo-Json -Compress)
+            return
+        }
+        $jobId = $active[0].id
+    }
+
+    $payload = @{ task_id = $jobId } | ConvertTo-Json -Compress
+    Write-Output $payload
+    Upsert-Job $repoRoot @{ id = $jobId; status = "cancelling"; phase = "cancelling" }
+    Add-JobLogLine $repoRoot $jobId "Cancellation requested"
 }
 
 # ---- command: result ----
